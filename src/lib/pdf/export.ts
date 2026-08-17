@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, degrees, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { PageEntry, PdfSource } from "./types";
-import { normalizeRotation } from "./types";
+import { BLANK_SOURCE_ID, normalizeRotation } from "./types";
 import {
   displaySize,
   hexToRgb,
@@ -16,7 +16,10 @@ async function loadLibDocs(
   sources: Record<string, PdfSource>,
 ): Promise<Map<string, PDFDocument>> {
   const map = new Map<string, PDFDocument>();
-  for (const sourceId of new Set(pages.map((p) => p.sourceId))) {
+  const ids = new Set(
+    pages.filter((p) => !p.blank && p.sourceId !== BLANK_SOURCE_ID).map((p) => p.sourceId),
+  );
+  for (const sourceId of ids) {
     const source = sources[sourceId];
     if (!source) throw new PdfError("missing-source");
     map.set(
@@ -32,6 +35,29 @@ function sanitizeText(value: string): string {
   return value.replace(/[^\u0000-\u00ff]/g, "?");
 }
 
+/** Lazily embedded Helvetica family, keyed by bold/italic combination. */
+type FontResolver = (bold: boolean, italic: boolean) => Promise<PDFFont>;
+
+function createFontResolver(out: PDFDocument): FontResolver {
+  const cache = new Map<string, PDFFont>();
+  return async (bold, italic) => {
+    const key = `${bold ? "b" : ""}${italic ? "i" : ""}`;
+    const existing = cache.get(key);
+    if (existing) return existing;
+    const name =
+      bold && italic
+        ? StandardFonts.HelveticaBoldOblique
+        : bold
+          ? StandardFonts.HelveticaBold
+          : italic
+            ? StandardFonts.HelveticaOblique
+            : StandardFonts.Helvetica;
+    const font = await out.embedFont(name);
+    cache.set(key, font);
+    return font;
+  };
+}
+
 interface DrawContext {
   page: PDFPage;
   pageWidth: number;
@@ -40,6 +66,7 @@ interface DrawContext {
   view: { width: number; height: number };
   font: PDFFont;
 }
+
 
 function drawAnnotation(
   ctx: DrawContext,
