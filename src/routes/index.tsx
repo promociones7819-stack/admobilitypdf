@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PdfEditorProvider, usePdfEditor } from "@/lib/pdf/store";
 import { StartScreen } from "@/components/pdf/StartScreen";
 import { Editor } from "@/components/pdf/Editor";
+import { OpenFromAi } from "@/components/ai/OpenFromAi";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -27,7 +28,12 @@ export const Route = createFileRoute("/")({
 
 function Workspace() {
   const { hasDocument } = usePdfEditor();
-  return hasDocument ? <Editor /> : <StartScreen />;
+  return (
+    <>
+      <OpenFromAi />
+      {hasDocument ? <Editor /> : <StartScreen />}
+    </>
+  );
 }
 
 function Index() {

@@ -9,6 +9,8 @@ import {
   Undo2,
   Plus,
 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -108,6 +110,11 @@ export function TopBar({ onToggleThumbs }: { onToggleThumbs: () => void }) {
       </IconAction>
 
       <div className="ml-auto flex items-center gap-3">
+        <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
+          <Link to="/ia">
+            <Sparkles className="mr-2 size-4" /> IA Documentos
+          </Link>
+        </Button>
         <div className="hidden max-w-[240px] flex-col items-end text-right sm:flex">
           <span className="truncate text-xs font-medium text-foreground">
             {fileName ?? "documento.pdf"}
