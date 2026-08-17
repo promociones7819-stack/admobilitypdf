@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { FilePlus2, Layers, Loader2, ShieldCheck, UploadCloud } from "lucide-react";
+import { FilePlus2, FileType2, Layers, Loader2, ShieldCheck, UploadCloud } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { usePdfEditor, friendlyError } from "@/lib/pdf/store";
