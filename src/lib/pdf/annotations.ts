@@ -135,7 +135,15 @@ export function createAnnotation(
     opacity: resolved.opacity,
     strokeWidth: resolved.strokeWidth,
     filled: resolved.filled,
-    ...(kind === "text" ? { fontSize: style.fontSize } : {}),
+    ...(kind === "text"
+      ? {
+          fontSize: style.fontSize,
+          bold: style.bold,
+          italic: style.italic,
+          underline: style.underline,
+        }
+      : {}),
+
     ...extra,
   };
 }
