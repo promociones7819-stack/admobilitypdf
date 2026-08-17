@@ -509,6 +509,8 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       historyIndex,
       images,
       importFiles,
+      addBlankPage,
+
       movePage,
       openFiles,
       pages,
