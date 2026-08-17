@@ -272,7 +272,12 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
           if (editing?.id === merged.id) {
             return (
               <textarea
-                autoFocus
+                ref={(node) => {
+                  if (node && document.activeElement !== node) {
+                    node.focus();
+                    node.setSelectionRange(node.value.length, node.value.length);
+                  }
+                }}
                 value={editing.value}
                 onChange={(e) => setEditing({ id: merged.id, value: e.target.value })}
                 onBlur={() => {
