@@ -125,15 +125,27 @@ export function ThumbnailPanel() {
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Páginas ({pages.length})
         </span>
-        <button
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          onClick={() => {
-            insertAfterRef.current = null;
-            importRef.current?.click();
-          }}
-        >
-          <FilePlus className="size-3.5" /> Añadir
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            onClick={() => {
+              void addBlankPage(null).catch((e) => toast.error(friendlyError(e)));
+            }}
+            title="Insertar página en blanco al final"
+          >
+            <FileStack className="size-3.5" /> En blanco
+          </button>
+          <button
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            onClick={() => {
+              insertAfterRef.current = null;
+              importRef.current?.click();
+            }}
+          >
+            <FilePlus className="size-3.5" /> Añadir
+          </button>
+        </div>
+
       </div>
 
       <div data-thumb-scroll className="flex-1 space-y-2 overflow-y-auto p-3">
