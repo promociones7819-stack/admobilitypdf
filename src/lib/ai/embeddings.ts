@@ -33,14 +33,19 @@ function hash(value: string, seed: number): number {
 function hashVector(text: string): Float32Array {
   const vector = new Float32Array(DIMS);
   const tokens = tokenize(text);
+  const bump = (key: string, seed: number, weight: number) => {
+    const index = hash(key, seed) % DIMS;
+    vector[index] = (vector[index] ?? 0) + weight;
+  };
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i]!;
-    vector[hash(token, 1) % DIMS] += 1;
+    bump(token, 1, 1);
     // Prefijo: acerca variantes morfológicas ("movilidad"/"movil").
-    vector[hash(token.slice(0, 5), 7) % DIMS] += 0.6;
+    bump(token.slice(0, 5), 7, 0.6);
     const next = tokens[i + 1];
-    if (next) vector[hash(`${token}_${next}`, 13) % DIMS] += 0.4;
+    if (next) bump(`${token}_${next}`, 13, 0.4);
   }
+
   let norm = 0;
   for (const value of vector) norm += value * value;
   norm = Math.sqrt(norm) || 1;
