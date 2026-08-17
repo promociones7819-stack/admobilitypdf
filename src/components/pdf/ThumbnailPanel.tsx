@@ -222,6 +222,15 @@ export function ThumbnailPanel() {
                   </ContextMenuItem>
                   <ContextMenuItem
                     onClick={() => {
+                      void addBlankPage(page.id).catch((e: unknown) =>
+                        toast.error(friendlyError(e)),
+                      );
+                    }}
+                  >
+                    <FileStack className="mr-2 size-4" /> Insertar página en blanco
+
+                  <ContextMenuItem
+                    onClick={() => {
                       insertAfterRef.current =
                         index > 0 ? (pages[index - 1]?.id ?? null) : null;
                       importRef.current?.click();
