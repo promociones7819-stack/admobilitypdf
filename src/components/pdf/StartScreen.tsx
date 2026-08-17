@@ -76,7 +76,15 @@ export function StartScreen() {
           )}
         </div>
 
-        <p className="mt-8 inline-flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/convertir">
+              <FileType2 className="mr-2 size-4" /> Convertir Word ⇄ PDF
+            </Link>
+          </Button>
+        </div>
+
+        <p className="mt-6 inline-flex items-center gap-2 text-xs text-muted-foreground">
           <ShieldCheck className="size-3.5" />
           Tu documento se procesa localmente en tu navegador.
         </p>
