@@ -85,6 +85,8 @@ interface EditorContextValue {
   addImageAsset: (asset: ImageAsset) => void;
   openFiles: (files: File[]) => Promise<void>;
   importFiles: (files: File[], insertAfterPageId?: string | null) => Promise<void>;
+  addBlankPage: (insertAfterPageId?: string | null) => Promise<void>;
+
   closeDocument: () => void;
   setSelection: (ids: string[]) => void;
   setActivePage: (id: string) => void;
