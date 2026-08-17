@@ -1,24 +1,39 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { PdfEditorProvider, usePdfEditor } from "@/lib/pdf/store";
+import { StartScreen } from "@/components/pdf/StartScreen";
+import { Editor } from "@/components/pdf/Editor";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Editor PDF — Edita, organiza y anota tus PDFs" },
+      {
+        name: "description",
+        content:
+          "Editor de PDF en el navegador: reordena, elimina, duplica y rota páginas, combina documentos y descarga un PDF real. Procesado local y privado.",
+      },
+      { property: "og:title", content: "Editor PDF — Edita, organiza y anota tus PDFs" },
+      {
+        property: "og:description",
+        content:
+          "Organiza páginas, combina PDFs y exporta un PDF válido sin salir de tu navegador.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
+function Workspace() {
+  const { hasDocument } = usePdfEditor();
+  return hasDocument ? <Editor /> : <StartScreen />;
+}
+
 function Index() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <PdfEditorProvider>
+      <Workspace />
+    </PdfEditorProvider>
   );
 }
