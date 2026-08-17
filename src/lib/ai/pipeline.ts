@@ -141,7 +141,10 @@ export async function retrieve(
     notebookId,
     queryVector,
     options.topK ?? 6,
-    { sourceIds, pageNumbers },
+    {
+      ...(sourceIds ? { sourceIds } : {}),
+      ...(pageNumbers ? { pageNumbers } : {}),
+    },
   );
   return results.filter((item) => item.score > 0.05);
 }
@@ -166,8 +169,8 @@ export async function askWithSources(params: {
 }): Promise<AskResult> {
   const retrieved = await retrieve(params.notebookId, params.question, {
     topK: params.topK ?? (params.mode === "compare" ? 10 : 6),
-    sourceIds: params.sourceIds,
-    scope: params.scope,
+    ...(params.sourceIds ? { sourceIds: params.sourceIds } : {}),
+    ...(params.scope ? { scope: params.scope } : {}),
   });
   const citations = buildCitations(retrieved);
   const context = buildContext(retrieved);
