@@ -69,22 +69,56 @@ export function AnnotationOptions() {
       )}
 
       {showText && (
-        <label className="flex shrink-0 items-center gap-2 text-muted-foreground">
-          Tamaño
-          <input
-            type="number"
-            min={6}
-            max={96}
-            value={selected?.fontSize ?? style.fontSize}
-            onChange={(e) => {
-              const fontSize = Math.max(6, Math.min(96, Number(e.target.value) || 16));
-              setStyle({ fontSize });
-              if (selected) updateAnnotation(selected.id, { fontSize });
-            }}
-            className="h-7 w-16 rounded-md border border-input bg-background px-2"
-          />
-        </label>
+        <>
+          <label className="flex shrink-0 items-center gap-2 text-muted-foreground">
+            Tamaño
+            <input
+              type="number"
+              min={6}
+              max={96}
+              value={selected?.fontSize ?? style.fontSize}
+              onChange={(e) => {
+                const fontSize = Math.max(6, Math.min(96, Number(e.target.value) || 16));
+                setStyle({ fontSize });
+                if (selected) updateAnnotation(selected.id, { fontSize });
+              }}
+              className="h-7 w-16 rounded-md border border-input bg-background px-2"
+            />
+          </label>
+          <div className="flex shrink-0 items-center gap-1">
+            {(
+              [
+                { key: "bold", label: "B", aria: "Negrita", className: "font-bold" },
+                { key: "italic", label: "I", aria: "Cursiva", className: "italic" },
+                { key: "underline", label: "U", aria: "Subrayado", className: "underline" },
+              ] as const
+            ).map((option) => {
+              const active = selected ? !!selected[option.key] : style[option.key];
+              return (
+                <button
+                  key={option.key}
+                  aria-label={option.aria}
+                  aria-pressed={active}
+                  title={option.aria}
+                  onClick={() => {
+                    const next = !active;
+                    setStyle({ [option.key]: next });
+                    if (selected) updateAnnotation(selected.id, { [option.key]: next });
+                  }}
+                  className={`size-7 rounded-md border text-[13px] transition-colors ${option.className} ${
+                    active
+                      ? "border-primary bg-primary/10 text-foreground"
+                      : "border-input text-muted-foreground hover:bg-accent"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </>
       )}
+
 
       <label className="flex shrink-0 items-center gap-2 text-muted-foreground">
         Opacidad

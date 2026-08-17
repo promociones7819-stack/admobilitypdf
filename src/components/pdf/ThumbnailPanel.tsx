@@ -6,6 +6,8 @@ import {
   RotateCw,
   Trash2,
   FilePlus,
+  FileStack,
+
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -42,7 +44,7 @@ function Thumbnail({ page, index }: { page: PageEntry; index: number }) {
   }, []);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || page.blank) return;
     const source = sources[page.sourceId];
     if (!source) return;
     let cancelled = false;
@@ -54,7 +56,26 @@ function Thumbnail({ page, index }: { page: PageEntry; index: number }) {
     return () => {
       cancelled = true;
     };
-  }, [visible, page.rotation, page.sourceId, page.sourceIndex, sources]);
+  }, [visible, page.blank, page.rotation, page.sourceId, page.sourceIndex, sources]);
+
+  if (page.blank) {
+    const ratio = page.blank.height / page.blank.width;
+    const swapped = page.rotation % 180 === 90;
+    const width = 130;
+    return (
+      <div ref={ref} className="w-full">
+        <div
+          className="mx-auto flex items-center justify-center rounded-sm border border-dashed border-border bg-white text-[10px] text-muted-foreground shadow-sm"
+          style={{
+            width,
+            height: Math.round(swapped ? width / ratio : width * ratio),
+          }}
+        >
+          En blanco
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div ref={ref} className="w-full">
@@ -71,6 +92,7 @@ function Thumbnail({ page, index }: { page: PageEntry; index: number }) {
   );
 }
 
+
 export function ThumbnailPanel() {
   const {
     pages,
@@ -84,6 +106,8 @@ export function ThumbnailPanel() {
     movePage,
     extractPages,
     importFiles,
+    addBlankPage,
+
   } = usePdfEditor();
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -105,15 +129,27 @@ export function ThumbnailPanel() {
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Páginas ({pages.length})
         </span>
-        <button
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          onClick={() => {
-            insertAfterRef.current = null;
-            importRef.current?.click();
-          }}
-        >
-          <FilePlus className="size-3.5" /> Añadir
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            onClick={() => {
+              void addBlankPage(null).catch((e) => toast.error(friendlyError(e)));
+            }}
+            title="Insertar página en blanco al final"
+          >
+            <FileStack className="size-3.5" /> En blanco
+          </button>
+          <button
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            onClick={() => {
+              insertAfterRef.current = null;
+              importRef.current?.click();
+            }}
+          >
+            <FilePlus className="size-3.5" /> Añadir
+          </button>
+        </div>
+
       </div>
 
       <div data-thumb-scroll className="flex-1 space-y-2 overflow-y-auto p-3">
@@ -184,6 +220,17 @@ export function ThumbnailPanel() {
                   >
                     <Download className="mr-2 size-4" /> Extraer página
                   </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() => {
+                      void addBlankPage(page.id).catch((e: unknown) =>
+                        toast.error(friendlyError(e)),
+                      );
+                    }}
+                  >
+                    <FileStack className="mr-2 size-4" /> Insertar página en blanco
+                  </ContextMenuItem>
+
+
                   <ContextMenuItem
                     onClick={() => {
                       insertAfterRef.current =

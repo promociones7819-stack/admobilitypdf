@@ -3,7 +3,7 @@ import { FileText } from "lucide-react";
 import { toast } from "sonner";
 import { usePdfEditor, friendlyError } from "@/lib/pdf/store";
 import { getPageSize, renderPageToCanvas } from "@/lib/pdf/render";
-import { createAnnotation, readImageAsset } from "@/lib/pdf/annotations";
+import { createAnnotation, displaySize, readImageAsset } from "@/lib/pdf/annotations";
 import { AnnotationLayer } from "./AnnotationLayer";
 import type { ZoomMode } from "./zoom";
 
@@ -40,14 +40,17 @@ export function PageViewer({ zoom, onEffectiveScale }: Props) {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !page || !source || containerSize.width === 0) return;
+    if (!canvas || !page || containerSize.width === 0) return;
+    if (!page.blank && !source) return;
     const token = ++tokenRef.current;
     let cancelled = false;
     setRendering(true);
 
     (async () => {
       try {
-        const base = await getPageSize(source.doc, page.sourceIndex, page.rotation);
+        const base = page.blank
+          ? displaySize(page.blank.width, page.blank.height, page.rotation)
+          : await getPageSize(source!.doc, page.sourceIndex, page.rotation);
         const padding = 48;
         let scale: number;
         if (typeof zoom === "number") {
@@ -63,10 +66,28 @@ export function PageViewer({ zoom, onEffectiveScale }: Props) {
         scale = Math.max(0.1, Math.min(scale, 6));
         if (cancelled || token !== tokenRef.current) return;
         onEffectiveScale(scale);
-        const result = await renderPageToCanvas(source.doc, page.sourceIndex, canvas, {
-          scale,
-          extraRotation: page.rotation,
-        });
+        let result: { width: number; height: number };
+        if (page.blank) {
+          const dpr = Math.min(window.devicePixelRatio || 1, 2);
+          const cssWidth = Math.floor(base.width * scale);
+          const cssHeight = Math.floor(base.height * scale);
+          canvas.width = Math.max(1, Math.floor(cssWidth * dpr));
+          canvas.height = Math.max(1, Math.floor(cssHeight * dpr));
+          canvas.style.width = `${cssWidth}px`;
+          canvas.style.height = `${cssHeight}px`;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          result = { width: cssWidth, height: cssHeight };
+        } else {
+          result = await renderPageToCanvas(source!.doc, page.sourceIndex, canvas, {
+            scale,
+            extraRotation: page.rotation,
+          });
+        }
         if (cancelled || token !== tokenRef.current) return;
         setLayer({
           width: Math.floor(result.width),
@@ -86,6 +107,7 @@ export function PageViewer({ zoom, onEffectiveScale }: Props) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page?.id, page?.rotation, page?.sourceIndex, source?.doc, zoom, containerSize.width, containerSize.height]);
+
 
   return (
     <div

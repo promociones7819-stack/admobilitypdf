@@ -40,8 +40,13 @@ export interface Annotation {
   filled: boolean;
   text?: string;
   fontSize?: number;
+  /** Text styling (kind === "text"). */
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
   points?: Point[];
   imageId?: string;
+
 }
 
 export interface ImageAsset {
@@ -58,6 +63,9 @@ export interface AnnotationStyle {
   strokeWidth: number;
   fontSize: number;
   filled: boolean;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
 }
 
 export const DEFAULT_STYLE: AnnotationStyle = {
@@ -66,7 +74,11 @@ export const DEFAULT_STYLE: AnnotationStyle = {
   strokeWidth: 2,
   fontSize: 16,
   filled: false,
+  bold: false,
+  italic: false,
+  underline: false,
 };
+
 
 export const MARKER_KINDS: AnnotationKind[] = ["highlight", "underline", "strike"];
 
@@ -123,7 +135,15 @@ export function createAnnotation(
     opacity: resolved.opacity,
     strokeWidth: resolved.strokeWidth,
     filled: resolved.filled,
-    ...(kind === "text" ? { fontSize: style.fontSize } : {}),
+    ...(kind === "text"
+      ? {
+          fontSize: style.fontSize,
+          bold: style.bold,
+          italic: style.italic,
+          underline: style.underline,
+        }
+      : {}),
+
     ...extra,
   };
 }

@@ -269,6 +269,14 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
           ) : null;
         }
         case "text": {
+          const textStyle: React.CSSProperties = {
+            fontFamily: "Helvetica, Arial, sans-serif",
+            fontSize: `${px(merged.fontSize ?? 16)}px`,
+            color: merged.color,
+            fontWeight: merged.bold ? 700 : 400,
+            fontStyle: merged.italic ? "italic" : "normal",
+            textDecoration: merged.underline ? "underline" : "none",
+          };
           if (editing?.id === merged.id) {
             return (
               <textarea
@@ -286,27 +294,17 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
                   setEditing(null);
                 }}
                 className="size-full resize-none rounded-sm border border-primary bg-background/80 p-0 leading-tight outline-none"
-                style={{
-                  fontFamily: "Helvetica, Arial, sans-serif",
-                  fontSize: `${px(merged.fontSize ?? 16)}px`,
-                  color: merged.color,
-                }}
+                style={textStyle}
               />
             );
           }
           return (
-            <div
-              className="size-full whitespace-pre-wrap leading-tight"
-              style={{
-                fontFamily: "Helvetica, Arial, sans-serif",
-                fontSize: `${px(merged.fontSize ?? 16)}px`,
-                color: merged.color,
-              }}
-            >
+            <div className="size-full whitespace-pre-wrap leading-tight" style={textStyle}>
               {merged.text}
             </div>
           );
         }
+
         default:
           return null;
       }

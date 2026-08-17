@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, degrees, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { PageEntry, PdfSource } from "./types";
-import { normalizeRotation } from "./types";
+import { BLANK_SOURCE_ID, normalizeRotation } from "./types";
 import {
   displaySize,
   hexToRgb,
@@ -16,7 +16,10 @@ async function loadLibDocs(
   sources: Record<string, PdfSource>,
 ): Promise<Map<string, PDFDocument>> {
   const map = new Map<string, PDFDocument>();
-  for (const sourceId of new Set(pages.map((p) => p.sourceId))) {
+  const ids = new Set(
+    pages.filter((p) => !p.blank && p.sourceId !== BLANK_SOURCE_ID).map((p) => p.sourceId),
+  );
+  for (const sourceId of ids) {
     const source = sources[sourceId];
     if (!source) throw new PdfError("missing-source");
     map.set(
@@ -32,6 +35,29 @@ function sanitizeText(value: string): string {
   return value.replace(/[^\u0000-\u00ff]/g, "?");
 }
 
+/** Lazily embedded Helvetica family, keyed by bold/italic combination. */
+type FontResolver = (bold: boolean, italic: boolean) => Promise<PDFFont>;
+
+function createFontResolver(out: PDFDocument): FontResolver {
+  const cache = new Map<string, PDFFont>();
+  return async (bold, italic) => {
+    const key = `${bold ? "b" : ""}${italic ? "i" : ""}`;
+    const existing = cache.get(key);
+    if (existing) return existing;
+    const name =
+      bold && italic
+        ? StandardFonts.HelveticaBoldOblique
+        : bold
+          ? StandardFonts.HelveticaBold
+          : italic
+            ? StandardFonts.HelveticaOblique
+            : StandardFonts.Helvetica;
+    const font = await out.embedFont(name);
+    cache.set(key, font);
+    return font;
+  };
+}
+
 interface DrawContext {
   page: PDFPage;
   pageWidth: number;
@@ -40,6 +66,7 @@ interface DrawContext {
   view: { width: number; height: number };
   font: PDFFont;
 }
+
 
 function drawAnnotation(
   ctx: DrawContext,
@@ -143,9 +170,23 @@ function drawAnnotation(
           opacity: annotation.opacity,
           rotate: degrees(rotation),
         });
+        if (annotation.underline) {
+          const textWidth = font.widthOfTextAtSize(line, size);
+          const uV = baselineV + size * 0.14 / view.height;
+          const start = map(annotation.x, uV);
+          const end = map(annotation.x + textWidth / view.width, uV);
+          page.drawLine({
+            start,
+            end,
+            thickness: Math.max(0.5, size * 0.06),
+            color,
+            opacity: annotation.opacity,
+          });
+        }
       });
       break;
     }
+
     case "image": {
       const embedded = annotation.imageId ? images.get(annotation.imageId) : undefined;
       if (!embedded) break;
@@ -182,25 +223,34 @@ export async function buildPdf(
   const annotations = options.annotations ?? [];
   const assets = options.images ?? {};
 
-  let font: PDFFont | null = null;
+  const resolveFont = createFontResolver(out);
   const embeddedImages = new Map<string, unknown>();
 
   for (const entry of pages) {
-    const src = libDocs.get(entry.sourceId);
-    if (!src) throw new PdfError("missing-source");
-    const [copied] = await out.copyPages(src, [entry.sourceIndex - 1]);
-    if (!copied) throw new PdfError("missing-page");
-    const intrinsic = copied.getRotation().angle;
-    const rotation = normalizeRotation(intrinsic + entry.rotation);
-    copied.setRotation(degrees(rotation));
-    out.addPage(copied);
+    let target: PDFPage;
+    let rotation: number;
+
+    if (entry.blank || entry.sourceId === BLANK_SOURCE_ID) {
+      const size = entry.blank ?? { width: 595.28, height: 841.89 };
+      target = out.addPage([size.width, size.height]);
+      rotation = normalizeRotation(entry.rotation);
+      target.setRotation(degrees(rotation));
+    } else {
+      const src = libDocs.get(entry.sourceId);
+      if (!src) throw new PdfError("missing-source");
+      const [copied] = await out.copyPages(src, [entry.sourceIndex - 1]);
+      if (!copied) throw new PdfError("missing-page");
+      rotation = normalizeRotation(copied.getRotation().angle + entry.rotation);
+      copied.setRotation(degrees(rotation));
+      out.addPage(copied);
+      target = copied;
+    }
 
     const pageAnnotations = annotations.filter((a) => a.pageId === entry.id);
     if (pageAnnotations.length === 0) continue;
 
-    const { width: pageWidth, height: pageHeight } = copied.getSize();
+    const { width: pageWidth, height: pageHeight } = target.getSize();
     const view = displaySize(pageWidth, pageHeight, rotation);
-    if (!font) font = await out.embedFont(StandardFonts.Helvetica);
 
     for (const annotation of pageAnnotations) {
       if (annotation.kind === "image" && annotation.imageId) {
@@ -213,13 +263,15 @@ export async function buildPdf(
           embeddedImages.set(asset.id, embedded);
         }
       }
+      const font = await resolveFont(!!annotation.bold, !!annotation.italic);
       drawAnnotation(
-        { page: copied, pageWidth, pageHeight, rotation, view, font },
+        { page: target, pageWidth, pageHeight, rotation, view, font },
         annotation,
         embeddedImages,
       );
     }
   }
+
 
   return out.save();
 }
