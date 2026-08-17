@@ -206,6 +206,58 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     [commit, pages],
   );
 
+  /** Inserts an empty page, matching the size of the reference page when possible. */
+  const addBlankPage = useCallback(
+    async (insertAfterPageId?: string | null) => {
+      const anchorId = insertAfterPageId ?? activePageId;
+      const reference =
+        pages.find((p) => p.id === anchorId) ?? pages[pages.length - 1] ?? null;
+      let size = A4;
+      if (reference) {
+        if (reference.blank) size = reference.blank;
+        else {
+          const source = sources[reference.sourceId];
+          if (source) {
+            try {
+              size = await getPageSize(source.doc, reference.sourceIndex, 0);
+            } catch {
+              size = A4;
+            }
+          }
+        }
+      }
+      const blankPage: PageEntry = {
+        id: makeId("pg"),
+        sourceId: BLANK_SOURCE_ID,
+        sourceIndex: 0,
+        rotation: 0,
+        blank: { width: size.width, height: size.height },
+      };
+      const at = anchorId
+        ? pages.findIndex((p) => p.id === anchorId) + 1
+        : pages.length;
+      commit((current) => {
+        const index = anchorId
+          ? current.pages.findIndex((p) => p.id === anchorId) + 1
+          : current.pages.length;
+        const insertAt = index > 0 ? index : at;
+        return {
+          ...current,
+          pages: [
+            ...current.pages.slice(0, insertAt),
+            blankPage,
+            ...current.pages.slice(insertAt),
+          ],
+        };
+      });
+      setActivePageId(blankPage.id);
+      setSelectionState([blankPage.id]);
+      setSelectedAnnotation(null);
+    },
+    [activePageId, commit, pages, sources],
+  );
+
+
   const closeDocument = useCallback(() => {
     setSources({});
     setImages({});
