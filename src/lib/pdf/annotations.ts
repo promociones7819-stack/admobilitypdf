@@ -123,7 +123,7 @@ export function createAnnotation(
     opacity: resolved.opacity,
     strokeWidth: resolved.strokeWidth,
     filled: resolved.filled,
-    fontSize: kind === "text" ? style.fontSize : undefined,
+    ...(kind === "text" ? { fontSize: style.fontSize } : {}),
     ...extra,
   };
 }
