@@ -4,6 +4,8 @@ import { usePdfEditor } from "@/lib/pdf/store";
 import { PageViewer } from "./PageViewer";
 import { PageToolsRail } from "./PageToolsRail";
 import { StatusBar } from "./StatusBar";
+import { TopBar } from "./TopBar";
+
 import { ThumbnailPanel } from "./ThumbnailPanel";
 import { zoomIn, zoomOut, type ZoomMode } from "./zoom";
 
