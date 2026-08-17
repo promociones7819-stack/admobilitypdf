@@ -15,6 +15,7 @@ interface Props {
 export function PageViewer({ zoom, onEffectiveScale }: Props) {
   const { pages, activePageId, sources, style, addAnnotation, addImageAsset } = usePdfEditor();
   const page = pages.find((p) => p.id === activePageId) ?? pages[0];
+  const source = page ? sources[page.sourceId] : undefined;
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -39,7 +40,6 @@ export function PageViewer({ zoom, onEffectiveScale }: Props) {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const source = page ? sources[page.sourceId] : undefined;
     if (!canvas || !page || !source || containerSize.width === 0) return;
     const token = ++tokenRef.current;
     let cancelled = false;
@@ -85,7 +85,7 @@ export function PageViewer({ zoom, onEffectiveScale }: Props) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page?.id, page?.rotation, page?.sourceId, page?.sourceIndex, sources, zoom, containerSize.width, containerSize.height]);
+  }, [page?.id, page?.rotation, page?.sourceIndex, source?.doc, zoom, containerSize.width, containerSize.height]);
 
   return (
     <div
