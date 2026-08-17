@@ -22,7 +22,15 @@ export interface PageEntry {
   sourceIndex: number;
   /** Extra rotation applied by the user, added to the page's intrinsic rotation. */
   rotation: number;
+  /** Set for generated blank pages: size in PDF points. Then `sourceId` is BLANK_SOURCE_ID. */
+  blank?: { width: number; height: number };
 }
+
+export const BLANK_SOURCE_ID = "__blank__";
+
+/** A4 in points, used when there is no reference page. */
+export const A4 = { width: 595.28, height: 841.89 };
+
 
 export interface AnnotationBase {
   id: string;
