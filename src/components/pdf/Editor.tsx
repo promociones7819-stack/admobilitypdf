@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { usePdfEditor } from "@/lib/pdf/store";
 import { PageViewer } from "./PageViewer";
 import { PageToolsRail } from "./PageToolsRail";
@@ -57,6 +58,7 @@ export function Editor() {
   }, [activePageId, duplicatePages, effectiveScale, pages, redo, selection, setActivePage, undo]);
 
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="flex h-screen flex-col bg-canvas">
       <TopBar onToggleThumbs={() => setThumbsOpen(true)} />
       <div className="flex flex-1 overflow-hidden">
@@ -77,6 +79,7 @@ export function Editor() {
         </SheetContent>
       </Sheet>
     </div>
+    </TooltipProvider>
   );
 }
 
