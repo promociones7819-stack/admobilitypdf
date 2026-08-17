@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { FilePlus2, Layers, Loader2, ShieldCheck, UploadCloud } from "lucide-react";
+import { FilePlus2, FileType2, Layers, Loader2, ShieldCheck, UploadCloud } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { usePdfEditor, friendlyError } from "@/lib/pdf/store";
@@ -76,7 +77,15 @@ export function StartScreen() {
           )}
         </div>
 
-        <p className="mt-8 inline-flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/convertir">
+              <FileType2 className="mr-2 size-4" /> Convertir Word ⇄ PDF
+            </Link>
+          </Button>
+        </div>
+
+        <p className="mt-6 inline-flex items-center gap-2 text-xs text-muted-foreground">
           <ShieldCheck className="size-3.5" />
           Tu documento se procesa localmente en tu navegador.
         </p>
