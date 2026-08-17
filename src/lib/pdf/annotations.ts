@@ -63,6 +63,9 @@ export interface AnnotationStyle {
   strokeWidth: number;
   fontSize: number;
   filled: boolean;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
 }
 
 export const DEFAULT_STYLE: AnnotationStyle = {
@@ -71,7 +74,11 @@ export const DEFAULT_STYLE: AnnotationStyle = {
   strokeWidth: 2,
   fontSize: 16,
   filled: false,
+  bold: false,
+  italic: false,
+  underline: false,
 };
+
 
 export const MARKER_KINDS: AnnotationKind[] = ["highlight", "underline", "strike"];
 
