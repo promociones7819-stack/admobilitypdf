@@ -106,6 +106,8 @@ export function ThumbnailPanel() {
     movePage,
     extractPages,
     importFiles,
+    addBlankPage,
+
   } = usePdfEditor();
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
