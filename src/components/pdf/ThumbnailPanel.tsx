@@ -228,6 +228,8 @@ export function ThumbnailPanel() {
                     }}
                   >
                     <FileStack className="mr-2 size-4" /> Insertar página en blanco
+                  </ContextMenuItem>
+
 
                   <ContextMenuItem
                     onClick={() => {
