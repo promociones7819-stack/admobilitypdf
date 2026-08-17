@@ -44,6 +44,7 @@ export function PageViewer({ zoom, onEffectiveScale }: Props) {
     const token = ++tokenRef.current;
     let cancelled = false;
     setRendering(true);
+    console.log('[dbg] render effect run', token, page.id, zoom, containerSize.width);
 
     (async () => {
       try {
@@ -67,6 +68,7 @@ export function PageViewer({ zoom, onEffectiveScale }: Props) {
           scale,
           extraRotation: page.rotation,
         });
+        console.log('[dbg] rendered', token, cancelled, tokenRef.current, result.width);
         if (cancelled || token !== tokenRef.current) return;
         setLayer({
           width: Math.floor(result.width),
@@ -74,8 +76,8 @@ export function PageViewer({ zoom, onEffectiveScale }: Props) {
           scale,
           heightPt: base.height,
         });
-      } catch {
-        /* render cancelled or page unavailable */
+      } catch (error) {
+        console.log('[dbg] render error', error);
       } finally {
         if (!cancelled) setRendering(false);
       }
