@@ -15,8 +15,10 @@ interface Props {
   /** CSS size of the rendered page canvas. */
   width: number;
   height: number;
-  /** Points per CSS pixel, used to keep stroke/font sizes zoom-independent. */
+  /** CSS pixels per PDF point (zoom factor). */
   scale: number;
+  /** Page size in PDF points, as displayed (rotation applied). */
+  heightPt: number;
   onRequestImage: (placement: { x: number; y: number; width: number; height: number }) => void;
 }
 
@@ -42,7 +44,7 @@ function clamp01(value: number) {
   return Math.max(0, Math.min(1, value));
 }
 
-export function AnnotationLayer({ pageId, width, height, scale, onRequestImage }: Props) {
+export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequestImage }: Props) {
   const {
     annotations,
     images,
@@ -92,7 +94,7 @@ export function AnnotationLayer({ pageId, width, height, scale, onRequestImage }
       const annotation = createAnnotation(
         "text",
         pageId,
-        { x: at.x, y: at.y, width: 0.35, height: (style.fontSize * 1.4) / (height * scale) },
+        { x: at.x, y: at.y, width: 0.35, height: (style.fontSize * 1.4) / heightPt },
         style,
         { text: "" },
       );
@@ -173,7 +175,7 @@ export function AnnotationLayer({ pageId, width, height, scale, onRequestImage }
       } else {
         const box = normalizedBox(draft.start, draft.current);
         const geometry = MARKER_KINDS.includes(kind)
-          ? { ...box, height: Math.max(box.height, (style.fontSize * 1.1) / (height * scale)) }
+          ? { ...box, height: Math.max(box.height, (style.fontSize * 1.1) / heightPt) }
           : box;
         if (box.width > MIN_SIZE * 2 || box.height > MIN_SIZE * 2)
           addAnnotation(createAnnotation(kind, pageId, geometry, style));
@@ -191,7 +193,7 @@ export function AnnotationLayer({ pageId, width, height, scale, onRequestImage }
     const merged =
       preview.id === annotation.id ? ({ ...annotation, ...preview } as Annotation) : annotation;
     const selected = selectedAnnotationId === annotation.id && tool === "select";
-    const px = (value: number) => value / scale;
+    const px = (value: number) => value * scale;
     const box: React.CSSProperties = {
       position: "absolute",
       left: `${merged.x * 100}%`,
@@ -248,7 +250,7 @@ export function AnnotationLayer({ pageId, width, height, scale, onRequestImage }
                 points={(merged.points ?? []).map((p) => `${p.x},${p.y}`).join(" ")}
                 fill="none"
                 stroke={merged.color}
-                strokeWidth={Math.max(1, merged.strokeWidth) / scale}
+                strokeWidth={Math.max(1, merged.strokeWidth) * scale}
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 vectorEffect="non-scaling-stroke"
@@ -395,7 +397,7 @@ export function AnnotationLayer({ pageId, width, height, scale, onRequestImage }
             points={drafting.points.map((p) => `${p.x},${p.y}`).join(" ")}
             fill="none"
             stroke={style.color}
-            strokeWidth={Math.max(1, style.strokeWidth) / scale}
+            strokeWidth={Math.max(1, style.strokeWidth) * scale}
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
           />
