@@ -471,6 +471,8 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       addImageAsset,
       openFiles,
       importFiles,
+      addBlankPage,
+
       closeDocument,
       setSelection: setSelectionState,
       setActivePage: (id: string) => {
