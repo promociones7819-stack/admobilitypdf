@@ -170,9 +170,23 @@ function drawAnnotation(
           opacity: annotation.opacity,
           rotate: degrees(rotation),
         });
+        if (annotation.underline) {
+          const textWidth = font.widthOfTextAtSize(line, size);
+          const uV = baselineV + size * 0.14 / view.height;
+          const start = map(annotation.x, uV);
+          const end = map(annotation.x + textWidth / view.width, uV);
+          page.drawLine({
+            start,
+            end,
+            thickness: Math.max(0.5, size * 0.06),
+            color,
+            opacity: annotation.opacity,
+          });
+        }
       });
       break;
     }
+
     case "image": {
       const embedded = annotation.imageId ? images.get(annotation.imageId) : undefined;
       if (!embedded) break;
