@@ -55,14 +55,17 @@ export function Editor() {
   }, [activePageId, duplicatePages, effectiveScale, pages, redo, selection, setActivePage, undo]);
 
   return (
-    <div className="flex flex-1 overflow-hidden">
-      <aside className="hidden w-56 shrink-0 border-r border-border bg-card lg:block">
-        <ThumbnailPanel />
-      </aside>
-      <PageToolsRail />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <PageViewer zoom={zoom} onEffectiveScale={setEffectiveScale} />
-        <StatusBar zoom={zoom} effectiveScale={effectiveScale} setZoom={setZoom} />
+    <div className="flex h-screen flex-col bg-canvas">
+      <TopBar onToggleThumbs={() => setThumbsOpen(true)} />
+      <div className="flex flex-1 overflow-hidden">
+        <aside className="hidden w-56 shrink-0 border-r border-border bg-card lg:block">
+          <ThumbnailPanel />
+        </aside>
+        <PageToolsRail />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <PageViewer zoom={zoom} onEffectiveScale={setEffectiveScale} />
+          <StatusBar zoom={zoom} effectiveScale={effectiveScale} setZoom={setZoom} />
+        </div>
       </div>
 
       <Sheet open={thumbsOpen} onOpenChange={setThumbsOpen}>
@@ -71,12 +74,7 @@ export function Editor() {
           <ThumbnailPanel />
         </SheetContent>
       </Sheet>
-      <button
-        className="hidden"
-        data-open-thumbs
-        onClick={() => setThumbsOpen(true)}
-        aria-hidden
-      />
     </div>
   );
 }
+
