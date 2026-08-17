@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { usePdfEditor } from "@/lib/pdf/store";
+import type { ToolId } from "@/lib/pdf/annotations";
 import { PageViewer } from "./PageViewer";
-import { PageToolsRail } from "./PageToolsRail";
+import { AnnotationRail } from "./AnnotationRail";
+import { AnnotationOptions } from "./AnnotationOptions";
 import { StatusBar } from "./StatusBar";
 import { TopBar } from "./TopBar";
 
@@ -11,7 +13,7 @@ import { ThumbnailPanel } from "./ThumbnailPanel";
 import { zoomIn, zoomOut, type ZoomMode } from "./zoom";
 
 export function Editor() {
-  const { pages, activePageId, setActivePage, undo, redo, duplicatePages, selection } =
+  const { pages, activePageId, setActivePage, undo, redo, duplicatePages, selection, setTool } =
     usePdfEditor();
   const [zoom, setZoom] = useState<ZoomMode>("fit-page");
   const [effectiveScale, setEffectiveScale] = useState(1);
@@ -44,6 +46,25 @@ export function Editor() {
         setZoom(zoomOut(effectiveScale));
         return;
       }
+      if (!mod && !event.altKey) {
+        const shortcuts: Record<string, ToolId> = {
+          v: "select",
+          t: "text",
+          h: "highlight",
+          u: "underline",
+          s: "strike",
+          p: "ink",
+          r: "rect",
+          o: "ellipse",
+          i: "image",
+        };
+        const next = shortcuts[event.key.toLowerCase()];
+        if (next) {
+          event.preventDefault();
+          setTool(next);
+          return;
+        }
+      }
       if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         const index = pages.findIndex((p) => p.id === activePageId);
         const next = pages[index + (event.key === "ArrowRight" ? 1 : -1)];
@@ -55,7 +76,17 @@ export function Editor() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activePageId, duplicatePages, effectiveScale, pages, redo, selection, setActivePage, undo]);
+  }, [
+    activePageId,
+    duplicatePages,
+    effectiveScale,
+    pages,
+    redo,
+    selection,
+    setActivePage,
+    setTool,
+    undo,
+  ]);
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -65,8 +96,9 @@ export function Editor() {
         <aside className="hidden w-56 shrink-0 border-r border-border bg-card lg:block">
           <ThumbnailPanel />
         </aside>
-        <PageToolsRail />
+        <AnnotationRail />
         <div className="flex min-w-0 flex-1 flex-col">
+          <AnnotationOptions />
           <PageViewer zoom={zoom} onEffectiveScale={setEffectiveScale} />
           <StatusBar zoom={zoom} effectiveScale={effectiveScale} setZoom={setZoom} />
         </div>
