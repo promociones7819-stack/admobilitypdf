@@ -42,7 +42,7 @@ function Thumbnail({ page, index }: { page: PageEntry; index: number }) {
   }, []);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || page.blank) return;
     const source = sources[page.sourceId];
     if (!source) return;
     let cancelled = false;
@@ -54,7 +54,26 @@ function Thumbnail({ page, index }: { page: PageEntry; index: number }) {
     return () => {
       cancelled = true;
     };
-  }, [visible, page.rotation, page.sourceId, page.sourceIndex, sources]);
+  }, [visible, page.blank, page.rotation, page.sourceId, page.sourceIndex, sources]);
+
+  if (page.blank) {
+    const ratio = page.blank.height / page.blank.width;
+    const swapped = page.rotation % 180 === 90;
+    const width = 130;
+    return (
+      <div ref={ref} className="w-full">
+        <div
+          className="mx-auto flex items-center justify-center rounded-sm border border-dashed border-border bg-white text-[10px] text-muted-foreground shadow-sm"
+          style={{
+            width,
+            height: Math.round(swapped ? width / ratio : width * ratio),
+          }}
+        >
+          En blanco
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div ref={ref} className="w-full">
@@ -70,6 +89,7 @@ function Thumbnail({ page, index }: { page: PageEntry; index: number }) {
     </div>
   );
 }
+
 
 export function ThumbnailPanel() {
   const {
