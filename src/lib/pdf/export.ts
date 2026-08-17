@@ -35,6 +35,8 @@ export async function buildPdf(
     const [copied] = await out.copyPages(src, [entry.sourceIndex - 1]);
     if (!copied) throw new PdfError("missing-page");
     const current = copied.getRotation().angle;
+    copied.setRotation(degrees(normalizeRotation(current + entry.rotation)));
+
 
     out.addPage(copied);
   }
