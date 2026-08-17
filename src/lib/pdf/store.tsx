@@ -114,11 +114,6 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
   const commit = useCallback(
     (updater: (current: DocState) => DocState) => {
       setHistory((prev) => {
-        const index = prev.length - 1;
-        void index;
-        return prev;
-      });
-      setHistory((prev) => {
         const current = prev[historyIndex] ?? EMPTY_DOC;
         return [...prev.slice(0, historyIndex + 1), updater(current)];
       });
