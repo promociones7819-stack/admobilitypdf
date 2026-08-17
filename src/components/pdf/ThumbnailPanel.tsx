@@ -203,9 +203,10 @@ export function ThumbnailPanel() {
                   </ContextMenuItem>
                   <ContextMenuSeparator />
                   <ContextMenuItem
-                    variant="destructive"
+                    className="text-destructive focus:text-destructive"
                     onClick={() => confirmDelete(targets(page.id))}
                   >
+
                     <Trash2 className="mr-2 size-4" /> Eliminar página
                   </ContextMenuItem>
                 </ContextMenuContent>
