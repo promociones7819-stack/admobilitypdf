@@ -3,7 +3,7 @@ import { FileText } from "lucide-react";
 import { toast } from "sonner";
 import { usePdfEditor, friendlyError } from "@/lib/pdf/store";
 import { getPageSize, renderPageToCanvas } from "@/lib/pdf/render";
-import { createAnnotation, readImageAsset } from "@/lib/pdf/annotations";
+import { createAnnotation, displaySize, readImageAsset } from "@/lib/pdf/annotations";
 import { AnnotationLayer } from "./AnnotationLayer";
 import type { ZoomMode } from "./zoom";
 
