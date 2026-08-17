@@ -3,15 +3,29 @@ import {
   useCallback,
   useContext,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { getPdfjs } from "./pdfjs";
 import { buildPdf, downloadBytes, editedFileName, PdfError } from "./export";
 import { makeId, normalizeRotation, type PageEntry, type PdfSource } from "./types";
+import {
+  DEFAULT_STYLE,
+  type Annotation,
+  type AnnotationStyle,
+  type ImageAsset,
+  type ToolId,
+} from "./annotations";
 
 const MAX_BYTES = 150 * 1024 * 1024;
+
+/** One undoable snapshot of the working document. */
+interface DocState {
+  pages: PageEntry[];
+  annotations: Annotation[];
+}
+
+const EMPTY_DOC: DocState = { pages: [], annotations: [] };
 
 export function friendlyError(error: unknown): string {
   const name = (error as { name?: string })?.name ?? "";
@@ -20,6 +34,7 @@ export function friendlyError(error: unknown): string {
     return "El archivo está protegido con contraseña.";
   if (message === "file-too-large") return "El archivo supera el tamaño permitido (150 MB).";
   if (message === "not-a-pdf") return "Solo se admiten archivos PDF.";
+  if (message === "unsupported-image") return "Solo se admiten imágenes PNG o JPG.";
   if (message === "empty-document") return "El documento no tiene páginas.";
   if (error instanceof PdfError) return "No se ha podido exportar el PDF.";
   return "El PDF no se puede abrir.";
@@ -32,18 +47,14 @@ async function loadSource(file: File): Promise<PdfSource> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const pdfjs = await getPdfjs();
   const doc = await pdfjs.getDocument({ data: bytes.slice(0) }).promise;
-  return {
-    id: makeId("src"),
-    name: file.name,
-    bytes,
-    doc,
-    pageCount: doc.numPages,
-  };
+  return { id: makeId("src"), name: file.name, bytes, doc, pageCount: doc.numPages };
 }
 
 interface EditorContextValue {
   sources: Record<string, PdfSource>;
   pages: PageEntry[];
+  annotations: Annotation[];
+  images: Record<string, ImageAsset>;
   fileName: string | null;
   dirty: boolean;
   busy: boolean;
@@ -52,6 +63,17 @@ interface EditorContextValue {
   canUndo: boolean;
   canRedo: boolean;
   hasDocument: boolean;
+  tool: ToolId;
+  style: AnnotationStyle;
+  selectedAnnotationId: string | null;
+  setTool: (tool: ToolId) => void;
+  setStyle: (patch: Partial<AnnotationStyle>) => void;
+  setSelectedAnnotation: (id: string | null) => void;
+  addAnnotation: (annotation: Annotation) => void;
+  updateAnnotation: (id: string, patch: Partial<Annotation>) => void;
+  deleteAnnotation: (id: string) => void;
+  clearPageAnnotations: (pageId: string) => void;
+  addImageAsset: (asset: ImageAsset) => void;
   openFiles: (files: File[]) => Promise<void>;
   importFiles: (files: File[], insertAfterPageId?: string | null) => Promise<void>;
   closeDocument: () => void;
@@ -73,27 +95,34 @@ const EditorContext = createContext<EditorContextValue | null>(null);
 
 export function PdfEditorProvider({ children }: { children: ReactNode }) {
   const [sources, setSources] = useState<Record<string, PdfSource>>({});
-  const [history, setHistory] = useState<PageEntry[][]>([[]]);
+  const [images, setImages] = useState<Record<string, ImageAsset>>({});
+  const [history, setHistory] = useState<DocState[]>([EMPTY_DOC]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [savedIndex, setSavedIndex] = useState(0);
   const [fileName, setFileName] = useState<string | null>(null);
   const [selection, setSelectionState] = useState<string[]>([]);
   const [activePageId, setActivePageId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const selectionRef = useRef<string[]>([]);
-  selectionRef.current = selection;
+  const [tool, setToolState] = useState<ToolId>("select");
+  const [style, setStyleState] = useState<AnnotationStyle>(DEFAULT_STYLE);
+  const [selectedAnnotationId, setSelectedAnnotation] = useState<string | null>(null);
 
-  const pages = history[historyIndex] ?? [];
+  const doc = history[historyIndex] ?? EMPTY_DOC;
+  const pages = doc.pages;
+  const annotations = doc.annotations;
 
   const commit = useCallback(
-    (next: PageEntry[]) => {
-      setHistory((prev) => [...prev.slice(0, historyIndex + 1), next]);
+    (updater: (current: DocState) => DocState) => {
+      setHistory((prev) => {
+        const current = prev[historyIndex] ?? EMPTY_DOC;
+        return [...prev.slice(0, historyIndex + 1), updater(current)];
+      });
       setHistoryIndex((i) => i + 1);
     },
     [historyIndex],
   );
 
-  const resetHistory = useCallback((next: PageEntry[]) => {
+  const resetHistory = useCallback((next: DocState) => {
     setHistory([next]);
     setHistoryIndex(0);
     setSavedIndex(0);
@@ -117,12 +146,14 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
         for (const s of loaded) nextSources[s.id] = s;
         const nextPages = loaded.flatMap(pagesFromSource);
         setSources(nextSources);
-        resetHistory(nextPages);
+        resetHistory({ pages: nextPages, annotations: [] });
         setFileName(
           loaded.length === 1 ? (loaded[0]?.name ?? null) : "documento-combinado.pdf",
         );
         setSelectionState(nextPages[0] ? [nextPages[0].id] : []);
         setActivePageId(nextPages[0]?.id ?? null);
+        setSelectedAnnotation(null);
+        setToolState("select");
       } finally {
         setBusy(false);
       }
@@ -142,12 +173,17 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
           return next;
         });
         const newPages = loaded.flatMap(pagesFromSource);
-        const current = history[historyIndex] ?? [];
         const at = insertAfterPageId
-          ? current.findIndex((p) => p.id === insertAfterPageId) + 1
-          : current.length;
-        const next = [...current.slice(0, at), ...newPages, ...current.slice(at)];
-        commit(next);
+          ? pages.findIndex((p) => p.id === insertAfterPageId) + 1
+          : pages.length;
+        commit((current) => ({
+          ...current,
+          pages: [
+            ...current.pages.slice(0, at),
+            ...newPages,
+            ...current.pages.slice(at),
+          ],
+        }));
         if (newPages[0]) {
           setSelectionState([newPages[0].id]);
           setActivePageId(newPages[0].id);
@@ -156,107 +192,176 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
         setBusy(false);
       }
     },
-    [commit, history, historyIndex],
+    [commit, pages],
   );
 
   const closeDocument = useCallback(() => {
     setSources({});
-    resetHistory([]);
+    setImages({});
+    resetHistory(EMPTY_DOC);
     setFileName(null);
     setSelectionState([]);
     setActivePageId(null);
+    setSelectedAnnotation(null);
+    setToolState("select");
   }, [resetHistory]);
-
-  const ensureActive = useCallback((next: PageEntry[], previousActive: string | null) => {
-    if (previousActive && next.some((p) => p.id === previousActive)) return previousActive;
-    return next[0]?.id ?? null;
-  }, []);
 
   const deletePages = useCallback(
     (ids: string[]) => {
       if (ids.length === 0) return;
-      const current = history[historyIndex] ?? [];
-      const next = current.filter((p) => !ids.includes(p.id));
-      commit(next);
-      const nextActive = ensureActive(next, activePageId);
+      const nextPages = pages.filter((p) => !ids.includes(p.id));
+      commit((current) => ({
+        pages: current.pages.filter((p) => !ids.includes(p.id)),
+        annotations: current.annotations.filter((a) => !ids.includes(a.pageId)),
+      }));
+      const nextActive =
+        activePageId && nextPages.some((p) => p.id === activePageId)
+          ? activePageId
+          : (nextPages[0]?.id ?? null);
       setActivePageId(nextActive);
       setSelectionState(nextActive ? [nextActive] : []);
+      setSelectedAnnotation(null);
     },
-    [activePageId, commit, ensureActive, history, historyIndex],
+    [activePageId, commit, pages],
   );
 
   const duplicatePages = useCallback(
     (ids: string[]) => {
       if (ids.length === 0) return;
-      const current = history[historyIndex] ?? [];
-      const next: PageEntry[] = [];
-      for (const page of current) {
-        next.push(page);
-        if (ids.includes(page.id)) next.push({ ...page, id: makeId("pg") });
-      }
-      commit(next);
+      commit((current) => {
+        const nextPages: PageEntry[] = [];
+        const nextAnnotations = [...current.annotations];
+        for (const page of current.pages) {
+          nextPages.push(page);
+          if (ids.includes(page.id)) {
+            const cloneId = makeId("pg");
+            nextPages.push({ ...page, id: cloneId });
+            for (const annotation of current.annotations) {
+              if (annotation.pageId === page.id)
+                nextAnnotations.push({ ...annotation, id: makeId("ann"), pageId: cloneId });
+            }
+          }
+        }
+        return { pages: nextPages, annotations: nextAnnotations };
+      });
     },
-    [commit, history, historyIndex],
+    [commit],
   );
 
   const rotatePages = useCallback(
     (ids: string[], delta: number) => {
       if (ids.length === 0) return;
-      const current = history[historyIndex] ?? [];
-      commit(
-        current.map((p) =>
+      commit((current) => ({
+        ...current,
+        pages: current.pages.map((p) =>
           ids.includes(p.id) ? { ...p, rotation: normalizeRotation(p.rotation + delta) } : p,
         ),
-      );
+      }));
     },
-    [commit, history, historyIndex],
+    [commit],
   );
 
   const movePage = useCallback(
     (id: string, targetIndex: number) => {
-      const current = history[historyIndex] ?? [];
-      const from = current.findIndex((p) => p.id === id);
+      const from = pages.findIndex((p) => p.id === id);
       if (from === -1) return;
-      const moved = current[from]!;
-      const without = current.filter((_, i) => i !== from);
-      const clamped = Math.max(0, Math.min(targetIndex, without.length));
-      if (clamped === from) return;
-      commit([...without.slice(0, clamped), moved, ...without.slice(clamped)]);
+      const clamped = Math.max(0, Math.min(targetIndex, pages.length - 1 + 1));
+      if (clamped === from || clamped === from + 1) return;
+      commit((current) => {
+        const index = current.pages.findIndex((p) => p.id === id);
+        if (index === -1) return current;
+        const moved = current.pages[index]!;
+        const without = current.pages.filter((_, i) => i !== index);
+        const at = Math.max(0, Math.min(clamped > index ? clamped - 1 : clamped, without.length));
+        return {
+          ...current,
+          pages: [...without.slice(0, at), moved, ...without.slice(at)],
+        };
+      });
     },
-    [commit, history, historyIndex],
+    [commit, pages],
   );
 
-  const undo = useCallback(() => setHistoryIndex((i) => Math.max(0, i - 1)), []);
-  const redo = useCallback(
-    () => setHistoryIndex((i) => Math.min(history.length - 1, i + 1)),
-    [history.length],
+  const addAnnotation = useCallback(
+    (annotation: Annotation) => {
+      commit((current) => ({
+        ...current,
+        annotations: [...current.annotations, annotation],
+      }));
+      setSelectedAnnotation(annotation.id);
+    },
+    [commit],
   );
+
+  const updateAnnotation = useCallback(
+    (id: string, patch: Partial<Annotation>) => {
+      commit((current) => ({
+        ...current,
+        annotations: current.annotations.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+      }));
+    },
+    [commit],
+  );
+
+  const deleteAnnotation = useCallback(
+    (id: string) => {
+      commit((current) => ({
+        ...current,
+        annotations: current.annotations.filter((a) => a.id !== id),
+      }));
+      setSelectedAnnotation(null);
+    },
+    [commit],
+  );
+
+  const clearPageAnnotations = useCallback(
+    (pageId: string) => {
+      commit((current) => ({
+        ...current,
+        annotations: current.annotations.filter((a) => a.pageId !== pageId),
+      }));
+      setSelectedAnnotation(null);
+    },
+    [commit],
+  );
+
+  const addImageAsset = useCallback((asset: ImageAsset) => {
+    setImages((prev) => ({ ...prev, [asset.id]: asset }));
+  }, []);
+
+  const undo = useCallback(() => {
+    setSelectedAnnotation(null);
+    setHistoryIndex((i) => Math.max(0, i - 1));
+  }, []);
+  const redo = useCallback(() => {
+    setSelectedAnnotation(null);
+    setHistoryIndex((i) => Math.min(history.length - 1, i + 1));
+  }, [history.length]);
 
   const download = useCallback(async () => {
     setBusy(true);
     try {
-      const bytes = await buildPdf(history[historyIndex] ?? [], sources);
+      const bytes = await buildPdf(pages, sources, { annotations, images });
       downloadBytes(bytes, editedFileName(fileName));
       setSavedIndex(historyIndex);
     } finally {
       setBusy(false);
     }
-  }, [fileName, history, historyIndex, sources]);
+  }, [annotations, fileName, historyIndex, images, pages, sources]);
 
   const extractPages = useCallback(
     async (ids: string[]) => {
       setBusy(true);
       try {
-        const current = history[historyIndex] ?? [];
-        const subset = current.filter((p) => ids.includes(p.id));
-        const bytes = await buildPdf(subset, sources);
+        const subset = pages.filter((p) => ids.includes(p.id));
+        const bytes = await buildPdf(subset, sources, { annotations, images });
         const base = (fileName ?? "documento").replace(/\.pdf$/i, "");
         downloadBytes(bytes, `${base}-extraido.pdf`);
       } finally {
         setBusy(false);
       }
     },
-    [fileName, history, historyIndex, sources],
+    [annotations, fileName, images, pages, sources],
   );
 
   const toggleSelection = useCallback((id: string, additive: boolean) => {
@@ -267,10 +372,21 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     setActivePageId(id);
   }, []);
 
+  const setTool = useCallback((next: ToolId) => {
+    setToolState(next);
+    if (next !== "select") setSelectedAnnotation(null);
+  }, []);
+
+  const setStyle = useCallback((patch: Partial<AnnotationStyle>) => {
+    setStyleState((prev) => ({ ...prev, ...patch }));
+  }, []);
+
   const value = useMemo<EditorContextValue>(
     () => ({
       sources,
       pages,
+      annotations,
+      images,
       fileName,
       dirty: historyIndex !== savedIndex,
       busy,
@@ -279,6 +395,17 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       canUndo: historyIndex > 0,
       canRedo: historyIndex < history.length - 1,
       hasDocument: pages.length > 0,
+      tool,
+      style,
+      selectedAnnotationId,
+      setTool,
+      setStyle,
+      setSelectedAnnotation,
+      addAnnotation,
+      updateAnnotation,
+      deleteAnnotation,
+      clearPageAnnotations,
+      addImageAsset,
       openFiles,
       importFiles,
       closeDocument,
@@ -286,6 +413,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       setActivePage: (id: string) => {
         setActivePageId(id);
         setSelectionState([id]);
+        setSelectedAnnotation(null);
       },
       toggleSelection,
       deletePages,
@@ -300,8 +428,13 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     }),
     [
       activePageId,
+      addAnnotation,
+      addImageAsset,
+      annotations,
       busy,
+      clearPageAnnotations,
       closeDocument,
+      deleteAnnotation,
       deletePages,
       download,
       duplicatePages,
@@ -309,6 +442,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       fileName,
       history.length,
       historyIndex,
+      images,
       importFiles,
       movePage,
       openFiles,
@@ -316,10 +450,16 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       redo,
       rotatePages,
       savedIndex,
+      selectedAnnotationId,
       selection,
+      setStyle,
+      setTool,
       sources,
+      style,
       toggleSelection,
+      tool,
       undo,
+      updateAnnotation,
     ],
   );
 
