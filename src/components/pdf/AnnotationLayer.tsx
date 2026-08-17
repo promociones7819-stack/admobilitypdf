@@ -90,6 +90,7 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
       return;
     }
     const at = toLocal(event);
+    console.log("[dbg] beginCreate", tool, at);
     if (tool === "text") {
       const annotation = createAnnotation(
         "text",
@@ -98,6 +99,7 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
         style,
         { text: "" },
       );
+      console.log("[dbg] text ann", annotation.id);
       addAnnotation(annotation);
       setEditing({ id: annotation.id, value: "" });
       setTool("select");
