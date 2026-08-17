@@ -223,25 +223,34 @@ export async function buildPdf(
   const annotations = options.annotations ?? [];
   const assets = options.images ?? {};
 
-  let font: PDFFont | null = null;
+  const resolveFont = createFontResolver(out);
   const embeddedImages = new Map<string, unknown>();
 
   for (const entry of pages) {
-    const src = libDocs.get(entry.sourceId);
-    if (!src) throw new PdfError("missing-source");
-    const [copied] = await out.copyPages(src, [entry.sourceIndex - 1]);
-    if (!copied) throw new PdfError("missing-page");
-    const intrinsic = copied.getRotation().angle;
-    const rotation = normalizeRotation(intrinsic + entry.rotation);
-    copied.setRotation(degrees(rotation));
-    out.addPage(copied);
+    let target: PDFPage;
+    let rotation: number;
+
+    if (entry.blank || entry.sourceId === BLANK_SOURCE_ID) {
+      const size = entry.blank ?? { width: 595.28, height: 841.89 };
+      target = out.addPage([size.width, size.height]);
+      rotation = normalizeRotation(entry.rotation);
+      target.setRotation(degrees(rotation));
+    } else {
+      const src = libDocs.get(entry.sourceId);
+      if (!src) throw new PdfError("missing-source");
+      const [copied] = await out.copyPages(src, [entry.sourceIndex - 1]);
+      if (!copied) throw new PdfError("missing-page");
+      rotation = normalizeRotation(copied.getRotation().angle + entry.rotation);
+      copied.setRotation(degrees(rotation));
+      out.addPage(copied);
+      target = copied;
+    }
 
     const pageAnnotations = annotations.filter((a) => a.pageId === entry.id);
     if (pageAnnotations.length === 0) continue;
 
-    const { width: pageWidth, height: pageHeight } = copied.getSize();
+    const { width: pageWidth, height: pageHeight } = target.getSize();
     const view = displaySize(pageWidth, pageHeight, rotation);
-    if (!font) font = await out.embedFont(StandardFonts.Helvetica);
 
     for (const annotation of pageAnnotations) {
       if (annotation.kind === "image" && annotation.imageId) {
@@ -254,13 +263,15 @@ export async function buildPdf(
           embeddedImages.set(asset.id, embedded);
         }
       }
+      const font = await resolveFont(!!annotation.bold, !!annotation.italic);
       drawAnnotation(
-        { page: copied, pageWidth, pageHeight, rotation, view, font },
+        { page: target, pageWidth, pageHeight, rotation, view, font },
         annotation,
         embeddedImages,
       );
     }
   }
+
 
   return out.save();
 }
