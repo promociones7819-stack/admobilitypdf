@@ -8,7 +8,16 @@ import {
 } from "react";
 import { getPdfjs } from "./pdfjs";
 import { buildPdf, downloadBytes, editedFileName, PdfError } from "./export";
-import { makeId, normalizeRotation, type PageEntry, type PdfSource } from "./types";
+import { getPageSize } from "./render";
+import {
+  A4,
+  BLANK_SOURCE_ID,
+  makeId,
+  normalizeRotation,
+  type PageEntry,
+  type PdfSource,
+} from "./types";
+
 import {
   DEFAULT_STYLE,
   type Annotation,
