@@ -40,8 +40,13 @@ export interface Annotation {
   filled: boolean;
   text?: string;
   fontSize?: number;
+  /** Text styling (kind === "text"). */
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
   points?: Point[];
   imageId?: string;
+
 }
 
 export interface ImageAsset {
