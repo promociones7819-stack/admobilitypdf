@@ -220,7 +220,7 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
               points: draft.points.map((p) => ({
                 x: (p.x - box.minX) / w,
                 y: (p.y - box.minY) / h,
-                p: p.p,
+                p: p.p ?? 1,
               })),
             }),
           );
