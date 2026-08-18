@@ -546,7 +546,12 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       annotations,
       busy,
       clearPageAnnotations,
+      toggleCover,
+      setCoversRevealed,
+      studyMode,
+      coverExport,
       closeDocument,
+
       deleteAnnotation,
       deletePages,
       download,
