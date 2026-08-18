@@ -25,6 +25,7 @@ import {
   type ImageAsset,
   type ToolId,
 } from "./annotations";
+import type { CoverExportMode } from "./export";
 
 const MAX_BYTES = 150 * 1024 * 1024;
 
@@ -82,6 +83,12 @@ interface EditorContextValue {
   updateAnnotation: (id: string, patch: Partial<Annotation>) => void;
   deleteAnnotation: (id: string) => void;
   clearPageAnnotations: (pageId: string) => void;
+  toggleCover: (id: string) => void;
+  setCoversRevealed: (revealed: boolean, pageId?: string | null) => void;
+  studyMode: boolean;
+  setStudyMode: (value: boolean) => void;
+  coverExport: CoverExportMode;
+  setCoverExport: (mode: CoverExportMode) => void;
   addImageAsset: (asset: ImageAsset) => void;
   openFiles: (files: File[]) => Promise<void>;
   importFiles: (files: File[], insertAfterPageId?: string | null) => Promise<void>;
@@ -117,6 +124,8 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
   const [tool, setToolState] = useState<ToolId>("select");
   const [style, setStyleState] = useState<AnnotationStyle>(DEFAULT_STYLE);
   const [selectedAnnotationId, setSelectedAnnotation] = useState<string | null>(null);
+  const [studyMode, setStudyMode] = useState(false);
+  const [coverExport, setCoverExport] = useState<CoverExportMode>("omit");
 
   const doc = history[historyIndex] ?? EMPTY_DOC;
   const pages = doc.pages;
@@ -388,6 +397,31 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  /** Reveals/hides one study strip. Undoable like any other change. */
+  const toggleCover = useCallback(
+    (id: string) => {
+      commit((current) => ({
+        ...current,
+        annotations: current.annotations.map((a) =>
+          a.id === id && a.kind === "studyCover" ? { ...a, revealed: !a.revealed } : a,
+        ),
+      }));
+    },
+    [commit],
+  );
+
+  const setCoversRevealed = useCallback(
+    (revealed: boolean, pageId?: string | null) => {
+      commit((current) => ({
+        ...current,
+        annotations: current.annotations.map((a) =>
+          a.kind === "studyCover" && (!pageId || a.pageId === pageId) ? { ...a, revealed } : a,
+        ),
+      }));
+    },
+    [commit],
+  );
+
   const addImageAsset = useCallback((asset: ImageAsset) => {
     setImages((prev) => ({ ...prev, [asset.id]: asset }));
   }, []);
@@ -404,27 +438,35 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
   const download = useCallback(async () => {
     setBusy(true);
     try {
-      const bytes = await buildPdf(pages, sources, { annotations, images });
+      const bytes = await buildPdf(pages, sources, {
+        annotations,
+        images,
+        coverMode: coverExport,
+      });
       downloadBytes(bytes, editedFileName(fileName));
       setSavedIndex(historyIndex);
     } finally {
       setBusy(false);
     }
-  }, [annotations, fileName, historyIndex, images, pages, sources]);
+  }, [annotations, coverExport, fileName, historyIndex, images, pages, sources]);
 
   const extractPages = useCallback(
     async (ids: string[]) => {
       setBusy(true);
       try {
         const subset = pages.filter((p) => ids.includes(p.id));
-        const bytes = await buildPdf(subset, sources, { annotations, images });
+        const bytes = await buildPdf(subset, sources, {
+          annotations,
+          images,
+          coverMode: coverExport,
+        });
         const base = (fileName ?? "documento").replace(/\.pdf$/i, "");
         downloadBytes(bytes, `${base}-extraido.pdf`);
       } finally {
         setBusy(false);
       }
     },
-    [annotations, fileName, images, pages, sources],
+    [annotations, coverExport, fileName, images, pages, sources],
   );
 
   const toggleSelection = useCallback((id: string, additive: boolean) => {
@@ -468,6 +510,12 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       updateAnnotation,
       deleteAnnotation,
       clearPageAnnotations,
+      toggleCover,
+      setCoversRevealed,
+      studyMode,
+      setStudyMode,
+      coverExport,
+      setCoverExport,
       addImageAsset,
       openFiles,
       importFiles,
@@ -498,7 +546,12 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       annotations,
       busy,
       clearPageAnnotations,
+      toggleCover,
+      setCoversRevealed,
+      studyMode,
+      coverExport,
       closeDocument,
+
       deleteAnnotation,
       deletePages,
       download,

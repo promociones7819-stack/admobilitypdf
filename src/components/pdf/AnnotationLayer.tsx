@@ -5,10 +5,12 @@ import {
   createAnnotation,
   imageDataUrl,
   MARKER_KINDS,
+  STROKE_KINDS,
   type Annotation,
   type AnnotationKind,
   type Point,
 } from "@/lib/pdf/annotations";
+import { fontCss } from "@/lib/pdf/fonts";
 
 interface Props {
   pageId: string;
@@ -44,6 +46,19 @@ function clamp01(value: number) {
   return Math.max(0, Math.min(1, value));
 }
 
+/** Pointer pressure normalized to a usable stroke multiplier. */
+function pressureOf(event: React.PointerEvent, enabled: boolean) {
+  if (!enabled) return 1;
+  const raw = event.pressure;
+  // Mouse/trackpad report 0.5 (or 0) — treat those as "no pressure info".
+  if (!raw || raw === 0.5 || event.pointerType === "mouse") return 1;
+  return 0.35 + raw * 0.95;
+}
+
+function strokePath(points: Point[]) {
+  return points.map((p) => `${p.x},${p.y}`).join(" ");
+}
+
 export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequestImage }: Props) {
   const {
     annotations,
@@ -51,6 +66,8 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
     tool,
     style,
     setTool,
+    studyMode,
+    toggleCover,
     selectedAnnotationId,
     setSelectedAnnotation,
     addAnnotation,
@@ -58,14 +75,39 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
     deleteAnnotation,
   } = usePdfEditor();
   const layerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
   const pageAnnotations = annotations.filter((a) => a.pageId === pageId);
 
+  /**
+   * Focus is applied in an effect (not inside render) so React has already
+   * committed the textarea. On macOS the native mousedown default action moves
+   * focus to <body> after render, which is why pointerdown is prevented at the
+   * source instead of re-focusing here on every keystroke.
+   */
+  useEffect(() => {
+    if (!editing) return;
+    const node = textareaRef.current;
+    if (!node) return;
+    const id = requestAnimationFrame(() => {
+      if (document.activeElement !== node) {
+        node.focus({ preventScroll: true });
+        const end = node.value.length;
+        node.setSelectionRange(end, end);
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [editing?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
-      if (target && /^(INPUT|TEXTAREA)$/.test(target.tagName)) return;
+      if (
+        target &&
+        (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)
+      )
+        return;
       if ((event.key === "Delete" || event.key === "Backspace") && selectedAnnotationId) {
         event.preventDefault();
         deleteAnnotation(selectedAnnotationId);
@@ -84,21 +126,36 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
     };
   }
 
+  function commitEditing() {
+    if (!editing) return;
+    const value = editing.value;
+    if (!value.trim()) deleteAnnotation(editing.id);
+    else updateAnnotation(editing.id, { text: value });
+    setEditing(null);
+  }
+
   function beginCreate(event: React.PointerEvent) {
+    if (editing) {
+      commitEditing();
+      if (tool === "select") return;
+    }
     if (tool === "select") {
       setSelectedAnnotation(null);
       return;
     }
     const at = toLocal(event);
     if (tool === "text") {
+      // Prevent the native focus shift so the textarea keeps focus on Mac.
+      event.preventDefault();
       const annotation = createAnnotation(
         "text",
         pageId,
-        { x: at.x, y: at.y, width: 0.35, height: (style.fontSize * 1.4) / heightPt },
+        { x: at.x, y: at.y, width: 0.35, height: (style.fontSize * 1.6) / heightPt },
         style,
         { text: "" },
       );
       addAnnotation(annotation);
+      setSelectedAnnotation(annotation.id);
       setEditing({ id: annotation.id, value: "" });
       setTool("select");
       return;
@@ -108,13 +165,15 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
       setTool("select");
       return;
     }
-    (event.target as HTMLElement).setPointerCapture?.(event.pointerId);
-    setDraft({ mode: "create", kind: tool, start: at, current: at, points: [at] });
+    event.preventDefault();
+    (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+    const first = { ...at, p: pressureOf(event, style.pressure) };
+    setDraft({ mode: "create", kind: tool, start: first, current: first, points: [first] });
   }
 
   function onPointerMove(event: React.PointerEvent) {
     if (!draft) return;
-    const at = toLocal(event);
+    const at = { ...toLocal(event), p: pressureOf(event, style.pressure) };
     if (draft.mode === "create") {
       setDraft({ ...draft, current: at, points: [...draft.points, at] });
       return;
@@ -122,7 +181,6 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
     const dx = at.x - draft.start.x;
     const dy = at.y - draft.start.y;
     if (draft.mode === "move") {
-      setDraft({ ...draft, start: draft.start });
       updateAnnotationPreview(draft.origin, {
         x: clamp01(draft.origin.x + dx),
         y: clamp01(draft.origin.y + dy),
@@ -144,7 +202,7 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
     if (!draft) return;
     if (draft.mode === "create") {
       const kind = draft.kind;
-      if (kind === "ink") {
+      if (STROKE_KINDS.includes(kind)) {
         const box = draft.points.reduce(
           (acc, p) => ({
             minX: Math.min(acc.minX, p.x),
@@ -158,18 +216,13 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
         const h = Math.max(box.maxY - box.minY, MIN_SIZE);
         if (draft.points.length > 1) {
           addAnnotation(
-            createAnnotation(
-              "ink",
-              pageId,
-              { x: box.minX, y: box.minY, width: w, height: h },
-              style,
-              {
-                points: draft.points.map((p) => ({
-                  x: (p.x - box.minX) / w,
-                  y: (p.y - box.minY) / h,
-                })),
-              },
-            ),
+            createAnnotation(kind, pageId, { x: box.minX, y: box.minY, width: w, height: h }, style, {
+              points: draft.points.map((p) => ({
+                x: (p.x - box.minX) / w,
+                y: (p.y - box.minY) / h,
+                p: p.p ?? 1,
+              })),
+            }),
           );
         }
       } else {
@@ -180,7 +233,8 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
         if (box.width > MIN_SIZE * 2 || box.height > MIN_SIZE * 2)
           addAnnotation(createAnnotation(kind, pageId, geometry, style));
       }
-      setTool("select");
+      // The strip and the pen stay active so several marks can be made in a row.
+      if (kind !== "studyCover" && !STROKE_KINDS.includes(kind)) setTool("select");
     } else if (preview.id) {
       const { id, ...patch } = preview;
       updateAnnotation(id, patch);
@@ -194,19 +248,54 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
       preview.id === annotation.id ? ({ ...annotation, ...preview } as Annotation) : annotation;
     const selected = selectedAnnotationId === annotation.id && tool === "select";
     const px = (value: number) => value * scale;
+    const isEditing = editing?.id === merged.id;
     const box: React.CSSProperties = {
       position: "absolute",
       left: `${merged.x * 100}%`,
       top: `${merged.y * 100}%`,
       width: `${merged.width * 100}%`,
       height: `${merged.height * 100}%`,
-      opacity: merged.opacity,
+      opacity: merged.kind === "studyCover" && merged.revealed ? 0.18 : merged.opacity,
     };
 
     const content = (() => {
       switch (merged.kind) {
+        case "studyCover":
+          return (
+            <div
+              className="size-full rounded-[3px] transition-opacity"
+              style={{
+                backgroundColor: merged.revealed ? "transparent" : merged.color,
+                border: merged.revealed ? `1px dashed ${merged.color}` : "none",
+              }}
+            />
+          );
         case "highlight":
-          return <div className="size-full" style={{ backgroundColor: merged.color }} />;
+          if ((merged.points ?? []).length > 1)
+            return (
+              <svg
+                className="size-full overflow-visible"
+                viewBox="0 0 1 1"
+                preserveAspectRatio="none"
+                style={{ mixBlendMode: "multiply" }}
+              >
+                <polyline
+                  points={strokePath(merged.points ?? [])}
+                  fill="none"
+                  stroke={merged.color}
+                  strokeWidth={Math.max(1, merged.strokeWidth) * scale}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
+            );
+          return (
+            <div
+              className="size-full rounded-[2px]"
+              style={{ backgroundColor: merged.color, mixBlendMode: "multiply" }}
+            />
+          );
         case "rect":
           return (
             <div
@@ -238,6 +327,7 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
                   right: 0,
                   top: merged.kind === "underline" ? "100%" : "50%",
                   height: `${px(Math.max(1, merged.strokeWidth))}px`,
+                  borderRadius: 999,
                   backgroundColor: merged.color,
                 }}
               />
@@ -247,7 +337,7 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
           return (
             <svg className="size-full overflow-visible" viewBox="0 0 1 1" preserveAspectRatio="none">
               <polyline
-                points={(merged.points ?? []).map((p) => `${p.x},${p.y}`).join(" ")}
+                points={strokePath(merged.points ?? [])}
                 fill="none"
                 stroke={merged.color}
                 strokeWidth={Math.max(1, merged.strokeWidth) * scale}
@@ -270,36 +360,38 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
         }
         case "text": {
           const textStyle: React.CSSProperties = {
-            fontFamily: "Helvetica, Arial, sans-serif",
+            fontFamily: fontCss(merged.fontFamily),
             fontSize: `${px(merged.fontSize ?? 16)}px`,
+            lineHeight: 1.25,
             color: merged.color,
             fontWeight: merged.bold ? 700 : 400,
             fontStyle: merged.italic ? "italic" : "normal",
             textDecoration: merged.underline ? "underline" : "none",
+            textAlign: (merged.align ?? "left") as React.CSSProperties["textAlign"],
           };
-          if (editing?.id === merged.id) {
+          if (isEditing) {
             return (
               <textarea
-                ref={(node) => {
-                  if (node && document.activeElement !== node) {
-                    node.focus();
-                    node.setSelectionRange(node.value.length, node.value.length);
+                ref={textareaRef}
+                value={editing!.value}
+                onChange={(e) => setEditing({ id: merged.id, value: e.target.value })}
+                onPointerDown={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  // Keep native Cmd/Ctrl shortcuts (A/C/V/X/Z) inside the field.
+                  e.stopPropagation();
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    commitEditing();
                   }
                 }}
-                value={editing.value}
-                onChange={(e) => setEditing({ id: merged.id, value: e.target.value })}
-                onBlur={() => {
-                  if (!editing.value.trim()) deleteAnnotation(merged.id);
-                  else updateAnnotation(merged.id, { text: editing.value });
-                  setEditing(null);
-                }}
-                className="size-full resize-none rounded-sm border border-primary bg-background/80 p-0 leading-tight outline-none"
+                onBlur={commitEditing}
+                className="size-full resize-none rounded-sm border border-primary bg-background/70 p-0 outline-none"
                 style={textStyle}
               />
             );
           }
           return (
-            <div className="size-full whitespace-pre-wrap leading-tight" style={textStyle}>
+            <div className="size-full whitespace-pre-wrap break-words" style={textStyle}>
               {merged.text}
             </div>
           );
@@ -310,12 +402,30 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
       }
     })();
 
+    const isCover = merged.kind === "studyCover";
     return (
       <div
         key={annotation.id}
-        style={box}
+        style={{ ...box, touchAction: "none" }}
         className={selected ? "outline outline-1 outline-primary" : undefined}
         onPointerDown={(event) => {
+          if (isEditing) return;
+          if (isCover) {
+            // Study interaction first: a tap reveals/hides; move only when selected.
+            event.stopPropagation();
+            if (selected) {
+              setDraft({
+                mode: "move",
+                id: annotation.id,
+                origin: annotation,
+                start: toLocal(event),
+              });
+              return;
+            }
+            event.preventDefault();
+            toggleCover(annotation.id);
+            return;
+          }
           if (tool !== "select") return;
           event.stopPropagation();
           setSelectedAnnotation(annotation.id);
@@ -327,8 +437,13 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
           });
         }}
         onDoubleClick={(event) => {
-          if (annotation.kind !== "text") return;
           event.stopPropagation();
+          if (isCover) {
+            setSelectedAnnotation(annotation.id);
+            return;
+          }
+          if (annotation.kind !== "text") return;
+          setSelectedAnnotation(annotation.id);
           setEditing({ id: annotation.id, value: annotation.text ?? "" });
         }}
       >
@@ -364,7 +479,8 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
   }
 
   const drafting = draft?.mode === "create" ? draft : null;
-  const draftBox = drafting && drafting.kind !== "ink" ? normalizedBox(drafting.start, drafting.current) : null;
+  const draftStroke = drafting && STROKE_KINDS.includes(drafting.kind) ? drafting : null;
+  const draftBox = drafting && !draftStroke ? normalizedBox(drafting.start, drafting.current) : null;
 
   return (
     <div
@@ -376,10 +492,13 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
         height,
         cursor: tool === "select" ? "default" : "crosshair",
         pointerEvents: "auto",
+        // Stops the browser from turning a pen/finger drawing gesture into a scroll.
+        touchAction: tool === "select" && !studyMode ? "auto" : "none",
       }}
       onPointerDown={beginCreate}
       onPointerMove={onPointerMove}
       onPointerUp={endDraft}
+      onPointerCancel={() => draft && endDraft()}
       onPointerLeave={() => draft && endDraft()}
     >
       {pageAnnotations.map(renderAnnotation)}
@@ -394,14 +513,35 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
           }}
         />
       )}
-      {drafting && drafting.kind === "ink" && (
-        <svg className="pointer-events-none absolute inset-0 size-full" viewBox="0 0 1 1" preserveAspectRatio="none">
+      {draftStroke && (
+        <svg
+          className="pointer-events-none absolute inset-0 size-full"
+          viewBox="0 0 1 1"
+          preserveAspectRatio="none"
+          style={
+            draftStroke.kind === "highlight"
+              ? { mixBlendMode: "multiply", opacity: Math.min(style.opacity, 0.45) }
+              : undefined
+          }
+        >
           <polyline
-            points={drafting.points.map((p) => `${p.x},${p.y}`).join(" ")}
+            points={strokePath(draftStroke.points)}
             fill="none"
-            stroke={style.color}
-            strokeWidth={Math.max(1, style.strokeWidth) * scale}
+            stroke={
+              draftStroke.kind === "highlight"
+                ? style.color === "#e11d48"
+                  ? "#facc15"
+                  : style.color
+                : style.color
+            }
+            strokeWidth={
+              Math.max(
+                1,
+                draftStroke.kind === "highlight" ? style.highlightWidth : style.strokeWidth,
+              ) * scale
+            }
             strokeLinecap="round"
+            strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
           />
         </svg>
