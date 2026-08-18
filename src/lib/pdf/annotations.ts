@@ -1,4 +1,5 @@
 import { makeId } from "./types";
+import { DEFAULT_FONT_FAMILY } from "./fonts";
 
 /** Annotation kinds available in the editor. */
 export type AnnotationKind =
@@ -9,14 +10,20 @@ export type AnnotationKind =
   | "ink"
   | "rect"
   | "ellipse"
-  | "image";
+  | "image"
+  /** Study strip ("Tira"): hides content until revealed. Never alters the PDF. */
+  | "studyCover";
 
 export type ToolId = "select" | AnnotationKind;
 
 export interface Point {
   x: number;
   y: number;
+  /** Normalized pointer pressure (0..1) when the device reports it. */
+  p?: number;
 }
+
+export type TextAlign = "left" | "center" | "right" | "justify";
 
 /**
  * An annotation placed on a working page.
@@ -46,6 +53,11 @@ export interface Annotation {
   underline?: boolean;
   points?: Point[];
   imageId?: string;
+  /** Font family name from the font catalogue (kind === "text"). */
+  fontFamily?: string;
+  align?: TextAlign;
+  /** Study strip state: false hides the content underneath. */
+  revealed?: boolean;
 
 }
 
@@ -61,26 +73,52 @@ export interface AnnotationStyle {
   color: string;
   opacity: number;
   strokeWidth: number;
+  /** Independent, much wider thickness range for the highlighter. */
+  highlightWidth: number;
   fontSize: number;
+  fontFamily: string;
+  align: TextAlign;
   filled: boolean;
   bold: boolean;
   italic: boolean;
   underline: boolean;
+  /** Use pointer pressure (Apple Pencil / stylus) to modulate stroke width. */
+  pressure: boolean;
 }
 
 export const DEFAULT_STYLE: AnnotationStyle = {
   color: "#e11d48",
   opacity: 1,
   strokeWidth: 2,
+  highlightWidth: 14,
   fontSize: 16,
+  fontFamily: DEFAULT_FONT_FAMILY,
+  align: "left",
   filled: false,
   bold: false,
   italic: false,
   underline: false,
+  pressure: true,
 };
 
+export const HIGHLIGHT_PRESETS = [
+  { label: "Muy fino", value: 4 },
+  { label: "Fino", value: 8 },
+  { label: "Medio", value: 14 },
+  { label: "Grueso", value: 24 },
+  { label: "Muy grueso", value: 36 },
+];
 
-export const MARKER_KINDS: AnnotationKind[] = ["highlight", "underline", "strike"];
+export const FONT_SIZE_PRESETS = [10, 12, 14, 16, 20, 24, 32, 48, 64];
+
+/** Tools drawn as a free stroke instead of a box. */
+export const STROKE_KINDS: AnnotationKind[] = ["ink", "highlight"];
+
+export const MIN_STROKE = 1;
+export const MAX_STROKE = 40;
+
+
+export const MARKER_KINDS: AnnotationKind[] = ["underline", "strike"];
 
 export const TOOL_LABELS: Record<ToolId, string> = {
   select: "Seleccionar",
@@ -92,6 +130,7 @@ export const TOOL_LABELS: Record<ToolId, string> = {
   rect: "Rectángulo",
   ellipse: "Elipse",
   image: "Imagen o firma",
+  studyCover: "Tira",
 };
 
 export const PALETTE = [
@@ -107,7 +146,14 @@ export const PALETTE = [
 
 export function styleDefaultsFor(kind: AnnotationKind, style: AnnotationStyle) {
   if (kind === "highlight")
-    return { color: "#facc15", opacity: 0.35, filled: true, strokeWidth: 0 };
+    return {
+      color: style.color === "#e11d48" ? "#facc15" : style.color,
+      opacity: Math.min(style.opacity, 0.45),
+      filled: true,
+      strokeWidth: style.highlightWidth,
+    };
+  if (kind === "studyCover")
+    return { color: "#1f2937", opacity: 1, filled: true, strokeWidth: 0 };
   if (kind === "underline" || kind === "strike")
     return { color: style.color, opacity: 1, filled: false, strokeWidth: style.strokeWidth };
   return {
@@ -135,8 +181,11 @@ export function createAnnotation(
     opacity: resolved.opacity,
     strokeWidth: resolved.strokeWidth,
     filled: resolved.filled,
+    ...(kind === "studyCover" ? { revealed: false } : {}),
     ...(kind === "text"
       ? {
+          fontFamily: style.fontFamily,
+          align: style.align,
           fontSize: style.fontSize,
           bold: style.bold,
           italic: style.italic,
