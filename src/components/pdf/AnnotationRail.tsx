@@ -13,6 +13,7 @@ import {
   Type,
   Underline,
   Circle,
+  SquareDashedBottom,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -60,6 +61,7 @@ const TOOLS: { id: ToolId; icon: React.ReactNode }[] = [
   { id: "rect", icon: <Square className="size-4" /> },
   { id: "ellipse", icon: <Circle className="size-4" /> },
   { id: "image", icon: <ImageIcon className="size-4" /> },
+  { id: "studyCover", icon: <SquareDashedBottom className="size-4" /> },
 ];
 
 export function AnnotationRail() {

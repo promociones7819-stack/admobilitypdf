@@ -22,7 +22,12 @@ export function Editor() {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
-      if (target && /^(INPUT|TEXTAREA)$/.test(target.tagName)) return;
+      // Never hijack native shortcuts while the user types (Mac Cmd+A/C/V/X/Z).
+      if (
+        target &&
+        (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)
+      )
+        return;
       const mod = event.metaKey || event.ctrlKey;
 
       if (mod && event.key.toLowerCase() === "z") {
@@ -57,6 +62,7 @@ export function Editor() {
           r: "rect",
           o: "ellipse",
           i: "image",
+          b: "studyCover",
         };
         const next = shortcuts[event.key.toLowerCase()];
         if (next) {

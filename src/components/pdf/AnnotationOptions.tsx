@@ -87,6 +87,8 @@ export function AnnotationOptions() {
     toggleCover,
     studyMode,
     setStudyMode,
+    coverExport,
+    setCoverExport,
   } = usePdfEditor();
   const [studyIndex, setStudyIndex] = useState(0);
   const selected = annotations.find((a) => a.id === selectedAnnotationId) ?? null;
@@ -350,6 +352,19 @@ export function AnnotationOptions() {
           >
             <GraduationCap className="size-3.5" /> Modo estudio
           </button>
+          <label className="flex items-center gap-1 text-muted-foreground">
+            Al exportar
+            <select
+              value={coverExport}
+              onChange={(e) => setCoverExport(e.target.value as typeof coverExport)}
+              className="h-7 rounded-md border border-input bg-background px-1"
+              aria-label="Tiras al exportar"
+            >
+              <option value="omit">Sin tiras</option>
+              <option value="cover">Tiras opacas</option>
+              <option value="outline">Solo contorno</option>
+            </select>
+          </label>
         </div>
       )}
 
