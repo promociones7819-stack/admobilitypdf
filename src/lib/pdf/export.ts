@@ -1,4 +1,12 @@
-import { PDFDocument, StandardFonts, degrees, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import {
+  LineCapStyle,
+  PDFDocument,
+  StandardFonts,
+  degrees,
+  rgb,
+  type PDFFont,
+  type PDFPage,
+} from "pdf-lib";
 import type { PageEntry, PdfSource } from "./types";
 import { BLANK_SOURCE_ID, normalizeRotation } from "./types";
 import {
@@ -193,7 +201,7 @@ function drawStroke(ctx: DrawContext, annotation: Annotation, roundCaps: boolean
       thickness: Math.max(0.5, base * pressure),
       color,
       opacity: annotation.opacity,
-      lineCap: roundCaps ? 1 : 0,
+      lineCap: roundCaps ? LineCapStyle.Round : LineCapStyle.Butt,
     });
   }
   void view;
@@ -271,7 +279,7 @@ function drawAnnotation(ctx: DrawContext, annotation: Annotation, images: Map<st
         thickness: Math.max(0.75, annotation.strokeWidth),
         color,
         opacity: annotation.opacity,
-        lineCap: 1,
+        lineCap: LineCapStyle.Round,
       });
       break;
     }
@@ -338,7 +346,7 @@ function drawAnnotation(ctx: DrawContext, annotation: Annotation, images: Map<st
             thickness: Math.max(0.5, size * 0.06),
             color,
             opacity: annotation.opacity,
-            lineCap: 1,
+            lineCap: LineCapStyle.Round,
           });
         }
       });
