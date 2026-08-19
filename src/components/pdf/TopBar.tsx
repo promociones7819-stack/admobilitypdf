@@ -116,6 +116,11 @@ export function TopBar({ onToggleThumbs }: { onToggleThumbs: () => void }) {
             <FileType2 className="mr-2 size-4" /> Word ⇄ PDF
           </Link>
         </Button>
+        <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
+          <Link to="/ocr">
+            <ScanText className="mr-2 size-4" /> OCR
+          </Link>
+        </Button>
         <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
           <Link to="/ia">
             <Sparkles className="mr-2 size-4" /> IA Documentos
