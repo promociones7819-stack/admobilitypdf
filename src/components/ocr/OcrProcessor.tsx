@@ -44,8 +44,11 @@ export function OcrProcessor() {
     setFileName(file.name);
     setStatus("Leyendo el archivo PDF…");
 
-    let worker: { recognize: (i: unknown) => Promise<{ data: { text: string } }>; terminate: () => Promise<unknown> } | null =
-      null;
+    type OcrWorker = {
+      recognize: (image: unknown) => Promise<{ data: { text: string } }>;
+      terminate: () => Promise<unknown>;
+    };
+    let worker: OcrWorker | null = null;
 
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
@@ -55,7 +58,7 @@ export function OcrProcessor() {
 
       setStatus("Inicializando el motor OCR (primera vez puede tardar)…");
       const { createWorker } = await import("tesseract.js");
-      worker = (await createWorker(language)) as unknown as typeof worker;
+      worker = (await createWorker(language)) as unknown as OcrWorker;
 
       const parts: string[] = [];
       for (let i = 1; i <= numPages; i++) {
