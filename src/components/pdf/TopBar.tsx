@@ -9,6 +9,7 @@ import {
   Undo2,
   Plus,
   FileType2,
+  ScanText,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
@@ -114,6 +115,11 @@ export function TopBar({ onToggleThumbs }: { onToggleThumbs: () => void }) {
         <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
           <Link to="/convertir">
             <FileType2 className="mr-2 size-4" /> Word ⇄ PDF
+          </Link>
+        </Button>
+        <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
+          <Link to="/ocr">
+            <ScanText className="mr-2 size-4" /> OCR
           </Link>
         </Button>
         <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">

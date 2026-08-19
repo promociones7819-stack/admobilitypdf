@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ConvertirRouteImport } from './routes/convertir'
 import { Route as IaRouteImport } from './routes/ia'
+import { Route as OcrRouteImport } from './routes/ocr'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +29,44 @@ const IaRoute = IaRouteImport.update({
   path: '/ia',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OcrRoute = OcrRouteImport.update({
+  id: '/ocr',
+  path: '/ocr',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/convertir': typeof ConvertirRoute
   '/ia': typeof IaRoute
+  '/ocr': typeof OcrRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/convertir': typeof ConvertirRoute
   '/ia': typeof IaRoute
+  '/ocr': typeof OcrRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/convertir': typeof ConvertirRoute
   '/ia': typeof IaRoute
+  '/ocr': typeof OcrRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/convertir' | '/ia'
+  fullPaths: '/' | '/convertir' | '/ia' | '/ocr'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/convertir' | '/ia'
-  id: '__root__' | '/' | '/convertir' | '/ia'
+  to: '/' | '/convertir' | '/ia' | '/ocr'
+  id: '__root__' | '/' | '/convertir' | '/ia' | '/ocr'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ConvertirRoute: typeof ConvertirRoute
   IaRoute: typeof IaRoute
+  OcrRoute: typeof OcrRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ocr': {
+      id: '/ocr'
+      path: '/ocr'
+      fullPath: '/ocr'
+      preLoaderRoute: typeof OcrRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ConvertirRoute: ConvertirRoute,
   IaRoute: IaRoute,
+  OcrRoute: OcrRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
