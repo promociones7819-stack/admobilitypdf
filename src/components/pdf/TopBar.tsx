@@ -9,6 +9,7 @@ import {
   Undo2,
   Plus,
   FileType2,
+  ScanText,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
