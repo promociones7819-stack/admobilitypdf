@@ -7,7 +7,14 @@ import {
   type ReactNode,
 } from "react";
 import { getPdfjs } from "./pdfjs";
-import { buildPdf, downloadBytes, editedFileName, PdfError } from "./export";
+import { toast } from "sonner";
+import {
+  buildPdf,
+  downloadBytes,
+  editedFileName,
+  getFontFallbacks,
+  PdfError,
+} from "./export";
 import { getPageSize } from "./render";
 import {
   A4,
