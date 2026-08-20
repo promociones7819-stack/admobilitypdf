@@ -12,9 +12,11 @@ import {
   Plus,
   Trash2,
   Upload,
+  Wand2,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,7 +58,9 @@ import {
 } from "@/lib/flipbook/hotspots";
 import { saveBlob } from "@/lib/download";
 import { FlipbookStage, type FlipbookHandle } from "./FlipbookStage";
+import { AutoMenuDialog } from "./AutoMenuDialog";
 import { HotspotEditor } from "./HotspotEditor";
+
 
 type Mode = "view" | "edit";
 type DraftKind = "page" | "url" | "menu";
@@ -79,6 +83,8 @@ export function FlipbookWorkspace() {
   const [zoom, setZoom] = useState(1);
   const [adding, setAdding] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [autoMenu, setAutoMenu] = useState(false);
+
   const [dialog, setDialog] = useState<{ id: string; kind: DraftKind; targetPage: string; url: string } | null>(
     null,
   );
@@ -280,14 +286,20 @@ export function FlipbookWorkspace() {
         </div>
 
         {mode === "edit" && (
-          <Button
-            variant={adding ? "default" : "outline"}
-            size="sm"
-            onClick={() => setAdding((value) => !value)}
-          >
-            <Plus className="mr-2 size-4" /> {adding ? "Dibuja el rectángulo" : "Añadir hotspot"}
-          </Button>
+          <>
+            <Button
+              variant={adding ? "default" : "outline"}
+              size="sm"
+              onClick={() => setAdding((value) => !value)}
+            >
+              <Plus className="mr-2 size-4" /> {adding ? "Dibuja el rectángulo" : "Añadir hotspot"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setAutoMenu(true)}>
+              <Wand2 className="mr-2 size-4" /> Crear menú automáticamente
+            </Button>
+          </>
         )}
+
 
         <div className="mx-1 h-6 w-px bg-border" />
         <Button variant="ghost" size="icon" aria-label="Página anterior" onClick={() => goToPage(page - 1)}>
@@ -582,6 +594,26 @@ export function FlipbookWorkspace() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AutoMenuDialog
+        open={autoMenu}
+        onOpenChange={setAutoMenu}
+        outline={doc.outline}
+        menuPage={page}
+        pageCount={pageCount}
+        pageSize={currentPage ? { width: currentPage.width, height: currentPage.height } : null}
+        onCreate={(created) => {
+          setConfig((prev) => ({ ...prev, hotspots: [...prev.hotspots, ...created] }));
+          const first = created[0];
+          if (first) {
+            setSelectedId(first.id);
+            goToPage(first.page);
+          }
+          toast.success(`Menú creado con ${created.length} enlaces`);
+        }}
+      />
+
+
 
       <input
         ref={openRef}
