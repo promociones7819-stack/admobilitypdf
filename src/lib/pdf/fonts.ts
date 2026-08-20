@@ -29,6 +29,8 @@ export interface FontDefinition {
   standard?: "Helvetica" | "Times" | "Courier";
   /** TTF urls for `embedded` fonts. */
   files?: FontVariantFiles;
+  /** Remote (CDN) TTF urls used when the local file cannot be fetched. */
+  cdn?: FontVariantFiles;
 }
 
 export const FONT_CATALOG: FontDefinition[] = [
