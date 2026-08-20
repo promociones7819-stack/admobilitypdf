@@ -42,14 +42,15 @@
           un pequeño servidor local incluido en esta carpeta:
         </p>
         <ul>
-          <li><b>Windows:</b> doble clic en <code>iniciar-windows.bat</code></li>
-          <li><b>macOS / Linux:</b> doble clic en <code>iniciar-mac-linux.command</code></li>
           <li>
-            O bien, en una terminal dentro de esta carpeta:
-            <code>python3 -m http.server 8080</code> y abre
-            <code>http://localhost:8080</code>
+            <b>Recomendado:</b> terminal en esta carpeta &rarr; <code>npm install</code> y
+            <code>npm run start</code>, luego abre <code>http://localhost:8080</code>
           </li>
+          <li><b>Windows sin Node:</b> doble clic en <code>iniciar-windows.bat</code></li>
+          <li><b>macOS / Linux sin Node:</b> doble clic en <code>iniciar-mac-linux.command</code></li>
+          <li>O bien: <code>python3 -m http.server 8080</code></li>
         </ul>
+        <p>Consulta <code>README.txt</code> para los pasos detallados.</p>
       </div>
     </div>
 
