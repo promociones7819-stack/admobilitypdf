@@ -58,7 +58,9 @@ import {
 } from "@/lib/flipbook/hotspots";
 import { saveBlob } from "@/lib/download";
 import { FlipbookStage, type FlipbookHandle } from "./FlipbookStage";
+import { AutoMenuDialog } from "./AutoMenuDialog";
 import { HotspotEditor } from "./HotspotEditor";
+
 
 type Mode = "view" | "edit";
 type DraftKind = "page" | "url" | "menu";
