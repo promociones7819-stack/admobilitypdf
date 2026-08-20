@@ -7,7 +7,14 @@ import {
   type ReactNode,
 } from "react";
 import { getPdfjs } from "./pdfjs";
-import { buildPdf, downloadBytes, editedFileName, PdfError } from "./export";
+import { toast } from "sonner";
+import {
+  buildPdf,
+  downloadBytes,
+  editedFileName,
+  getFontFallbacks,
+  PdfError,
+} from "./export";
 import { getPageSize } from "./render";
 import {
   A4,
@@ -444,6 +451,11 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
         coverMode: coverExport,
       });
       downloadBytes(bytes, editedFileName(fileName));
+      const fallbacks = getFontFallbacks();
+      if (fallbacks.length)
+        toast.warning(
+          `No se pudo incrustar la tipografía: ${fallbacks.join(", ")}. Se ha usado Helvetica.`,
+        );
       setSavedIndex(historyIndex);
     } finally {
       setBusy(false);
