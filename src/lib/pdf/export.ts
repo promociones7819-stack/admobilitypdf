@@ -16,7 +16,7 @@ import {
   type Annotation,
   type ImageAsset,
 } from "./annotations";
-import { embeddedFontUrl, findFont } from "./fonts";
+import { embeddedFontUrls, findFont } from "./fonts";
 
 export class PdfError extends Error {}
 
