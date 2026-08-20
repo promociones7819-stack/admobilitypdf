@@ -56,6 +56,8 @@ export function friendlyError(error: unknown): string {
     return "El archivo está vacío o no se ha podido leer del todo (prueba a descargarlo antes desde Archivos/iCloud).";
   if (message === "unsupported-image") return "Solo se admiten imágenes PNG o JPG.";
   if (message === "empty-document") return "El documento no tiene páginas.";
+  if (message === "invalid-pdf")
+    return "El archivo está dañado o usa una estructura PDF no compatible. Prueba a abrirlo y volverlo a guardar desde Archivos o Vista Previa.";
   if (error instanceof PdfError) return "No se ha podido exportar el PDF.";
   return `El PDF no se puede abrir${message ? ` (${message})` : ""}.`;
 }
@@ -80,19 +82,51 @@ async function loadSource(file: File): Promise<PdfSource> {
   if (!looksPdf && !header.includes("%PDF")) throw new Error("not-a-pdf");
   const pdfjs = await getPdfjs();
 
-  const open = (data: Uint8Array) => pdfjs.getDocument({ data: data.slice(0) }).promise;
+  const openBytes = (data: Uint8Array) =>
+    pdfjs.getDocument({ data: data.slice(0), stopAtErrors: false }).promise;
+
+  // WebKit on iPad can fail while transferring a large Uint8Array to the
+  // pdf.js worker. Loading the same File through a Blob URL avoids that copy.
+  const openFileUrl = async () => {
+    const url = URL.createObjectURL(file);
+    try {
+      return await pdfjs.getDocument({ url, stopAtErrors: false }).promise;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
 
   let doc;
+  let firstError: unknown;
   try {
-    doc = await open(bytes);
+    doc = await openFileUrl();
   } catch (error) {
+    firstError = error;
     const name = (error as { name?: string })?.name ?? "";
     if (name === "PasswordException") throw error;
-    // Muchos PDFs (escaneados, generados por apps móviles) tienen el índice
-    // dañado: pdf-lib los reconstruye y entonces sí se pueden abrir.
-    console.warn("[pdf] reintentando tras reparar el archivo", error);
-    bytes = new Uint8Array(await repairBytes(bytes));
-    doc = await open(bytes);
+    try {
+      doc = await openBytes(bytes);
+    } catch (bytesError) {
+      const bytesErrorName = (bytesError as { name?: string })?.name ?? "";
+      if (bytesErrorName === "PasswordException") throw bytesError;
+
+      // Some generators leave a damaged cross-reference table. pdf-lib can
+      // rebuild those files, but it cannot repair every malformed object. Keep
+      // that failure isolated so its minified type error is never shown.
+      try {
+        console.warn("[pdf] reintentando tras reparar el archivo", bytesError);
+        const repaired = new Uint8Array(await repairBytes(bytes));
+        doc = await openBytes(repaired);
+        bytes = repaired;
+      } catch (repairError) {
+        console.error("[pdf] fallaron apertura y reparación", {
+          firstError,
+          bytesError,
+          repairError,
+        });
+        throw new Error("invalid-pdf");
+      }
+    }
   }
   return { id: makeId("src"), name: file.name, bytes, doc, pageCount: doc.numPages };
 }
