@@ -143,25 +143,34 @@ export function FlipbookStage({
           width = height * spreadAspect;
         }
 
-        instance?.destroy();
+        try {
+          instance?.destroy();
+        } catch {
+          /* noop */
+        }
+        // PageFlip toma el control total del nodo que recibe: usamos un nodo
+        // interno propio para que React nunca compita por el mismo elemento.
         hostRef.current.innerHTML = "";
         hostRef.current.style.width = `${Math.round(width)}px`;
         hostRef.current.style.height = `${Math.round(height)}px`;
+        const mount = document.createElement("div");
+        mount.style.cssText = `width:${Math.round(width)}px;height:${Math.round(height)}px;`;
+        hostRef.current.appendChild(mount);
 
         for (const page of pages) {
           const el = buildPageElement(page, hotspots.filter((h) => h.page === page.number), menuPage);
           el.style.width = `${Math.round(single ? width : width / 2)}px`;
           el.style.height = `${Math.round(height)}px`;
-          hostRef.current.appendChild(el);
+          mount.appendChild(el);
         }
 
         instance = new (PageFlip as unknown as new (
           el: HTMLElement,
           cfg: Record<string, unknown>,
-        ) => PageFlipInstance)(hostRef.current, {
+        ) => PageFlipInstance)(mount, {
           width: Math.round(single ? width : width / 2),
           height: Math.round(height),
-          size: "stretch",
+          size: "fixed",
           minWidth: 120,
           maxWidth: 4000,
           minHeight: 120,
@@ -178,12 +187,13 @@ export function FlipbookStage({
           mobileScrollSupport: false,
         });
         flipRef.current = instance;
-        instance.loadFromHTML(hostRef.current.querySelectorAll(".page-container"));
+        instance.loadFromHTML(mount.querySelectorAll(".page-container"));
         instance.on("flip", (e) => {
           pageRef.current = e.data + 1;
           onPageChange(e.data + 1);
         });
       };
+
 
       build();
       observer = new ResizeObserver(() => build());
