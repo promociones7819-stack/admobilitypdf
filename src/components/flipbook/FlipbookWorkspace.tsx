@@ -12,9 +12,11 @@ import {
   Plus,
   Trash2,
   Upload,
+  Wand2,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
