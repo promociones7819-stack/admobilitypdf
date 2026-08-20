@@ -444,6 +444,11 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
         coverMode: coverExport,
       });
       downloadBytes(bytes, editedFileName(fileName));
+      const fallbacks = getFontFallbacks();
+      if (fallbacks.length)
+        toast.warning(
+          `No se pudo incrustar la tipografía: ${fallbacks.join(", ")}. Se ha usado Helvetica.`,
+        );
       setSavedIndex(historyIndex);
     } finally {
       setBusy(false);
