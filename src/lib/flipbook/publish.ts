@@ -49,11 +49,6 @@ export async function buildFlipbookZip(options: {
 
   const title = publicationName(options.docName);
 
-  const [pdfLib, pdfWorker, pageFlip] = await Promise.all([
-    fetchText(pdfLibUrl),
-    fetchText(pdfWorkerUrl),
-    fetchText(pageFlipUrl),
-  ]);
 
   folder.file("index.html", indexHtml.replaceAll("__TITLE__", escapeHtml(title)));
   folder.file("document.pdf", await options.file.arrayBuffer());
