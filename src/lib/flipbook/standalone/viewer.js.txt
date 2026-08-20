@@ -1,0 +1,358 @@
+// Visor flipbook autocontenido: pdf.js + StPageFlip, 100% local, sin servicios externos.
+import * as pdfjsLib from "../libs/pdf.min.mjs";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("../libs/pdf.worker.min.mjs", import.meta.url).href;
+
+const MAX_RENDER_WIDTH = 1400;
+
+const el = (id) => document.getElementById(id);
+const state = {
+  pages: [],
+  config: { menuPage: 1, hotspots: [] },
+  bookmarks: [],
+  flip: null,
+  page: 1,
+  zoom: 1,
+};
+
+async function readJson(path, fallback) {
+  try {
+    const res = await fetch(path);
+    if (!res.ok) throw new Error(String(res.status));
+    return await res.json();
+  } catch (error) {
+    console.warn("[flipbook] no se pudo leer", path, error);
+    return fallback;
+  }
+}
+
+async function renderDocument() {
+  const doc = await pdfjsLib.getDocument({ url: "document.pdf", stopAtErrors: false }).promise;
+
+  const refToPage = async (dest) => {
+    const first = Array.isArray(dest) ? dest[0] : null;
+    if (!first) return undefined;
+    if (typeof first === "number") return first + 1;
+    try {
+      return (await doc.getPageIndex(first)) + 1;
+    } catch {
+      return undefined;
+    }
+  };
+  const resolveDest = async (dest) => {
+    try {
+      if (typeof dest === "string") return await refToPage(await doc.getDestination(dest));
+      return await refToPage(dest);
+    } catch {
+      return undefined;
+    }
+  };
+
+  const pages = [];
+  for (let n = 1; n <= doc.numPages; n += 1) {
+    el("status").textContent = "Preparando páginas " + n + "/" + doc.numPages;
+    const page = await doc.getPage(n);
+    const base = page.getViewport({ scale: 1 });
+    const scale = Math.min(2, MAX_RENDER_WIDTH / base.width);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const ctx = canvas.getContext("2d");
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    const links = [];
+    try {
+      const annotations = await page.getAnnotations({ intent: "display" });
+      for (const a of annotations) {
+        if (a.subtype !== "Link") continue;
+        const [x1, y1, x2, y2] = a.rect;
+        const rect = pdfjsLib.Util.normalizeRect([x1, y1, x2, y2]);
+        const left = ((rect[0] - base.viewBox[0]) / base.width) * 100;
+        const top = ((base.viewBox[3] - rect[3]) / base.height) * 100;
+        const width = ((rect[2] - rect[0]) / base.width) * 100;
+        const height = ((rect[3] - rect[1]) / base.height) * 100;
+        if (a.url) links.push({ top, left, width, height, url: a.url });
+        else {
+          const target = await resolveDest(a.dest);
+          if (target) links.push({ top, left, width, height, targetPage: target });
+        }
+      }
+    } catch (error) {
+      console.warn("[flipbook] enlaces no legibles en la página", n, error);
+    }
+
+    pages.push({
+      number: n,
+      width: base.width,
+      height: base.height,
+      imageUrl: canvas.toDataURL("image/jpeg", 0.85),
+      links,
+    });
+  }
+  return pages;
+}
+
+function resolveTargetPage(hotspot) {
+  if (hotspot.action && hotspot.action.type === "page") return hotspot.action.targetPage;
+  if (hotspot.action && hotspot.action.type === "menu") return state.config.menuPage;
+  return null;
+}
+
+function buildPageElement(page) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "page-container";
+  wrapper.dataset.pageNumber = String(page.number);
+
+  const img = document.createElement("img");
+  img.src = page.imageUrl;
+  img.alt = "Página " + page.number;
+  img.draggable = false;
+  img.style.cssText =
+    "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;user-select:none;";
+  wrapper.appendChild(img);
+
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:absolute;inset:0;";
+
+  const place = (node, top, left, width, height) => {
+    node.className = "hotspot";
+    node.style.top = top + "%";
+    node.style.left = left + "%";
+    node.style.width = width + "%";
+    node.style.height = height + "%";
+    overlay.appendChild(node);
+  };
+
+  for (const link of page.links) {
+    const a = document.createElement("a");
+    if (link.url) {
+      a.href = link.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.dataset.fbAction = "url";
+    } else {
+      a.href = "#page=" + link.targetPage;
+      a.dataset.fbAction = "page";
+      a.dataset.fbPage = String(link.targetPage);
+    }
+    place(a, link.top, link.left, link.width, link.height);
+  }
+
+  for (const hotspot of state.config.hotspots) {
+    if (hotspot.page !== page.number) continue;
+    const target = resolveTargetPage(hotspot);
+    const a = document.createElement("a");
+    a.title = hotspot.label || "";
+    if (target) {
+      a.href = "#page=" + target;
+      a.dataset.fbAction = "page";
+      a.dataset.fbPage = String(target);
+    } else if (hotspot.action && hotspot.action.type === "url") {
+      a.href = hotspot.action.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.dataset.fbAction = "url";
+    }
+    place(
+      a,
+      (hotspot.y / page.height) * 100,
+      (hotspot.x / page.width) * 100,
+      (hotspot.width / page.width) * 100,
+      (hotspot.height / page.height) * 100,
+    );
+  }
+
+  wrapper.appendChild(overlay);
+  return wrapper;
+}
+
+function buildBook() {
+  const host = el("book");
+  const box = host.parentElement;
+  const first = state.pages[0];
+  if (!first) return;
+  const aspect = first.width / first.height;
+  const single = box.clientWidth < 760;
+  const available = {
+    width: Math.max(240, box.clientWidth - 24),
+    height: Math.max(240, box.clientHeight - 24),
+  };
+  const spreadAspect = single ? aspect : aspect * 2;
+  let width = available.width;
+  let height = width / spreadAspect;
+  if (height > available.height) {
+    height = available.height;
+    width = height * spreadAspect;
+  }
+
+  try {
+    if (state.flip) state.flip.destroy();
+  } catch {
+    /* noop */
+  }
+  host.innerHTML = "";
+  host.style.width = Math.round(width) + "px";
+  host.style.height = Math.round(height) + "px";
+  const mount = document.createElement("div");
+  mount.style.cssText = "width:" + Math.round(width) + "px;height:" + Math.round(height) + "px;";
+  host.appendChild(mount);
+
+  for (const page of state.pages) {
+    const node = buildPageElement(page);
+    node.style.width = Math.round(single ? width : width / 2) + "px";
+    node.style.height = Math.round(height) + "px";
+    mount.appendChild(node);
+  }
+
+  const flip = new window.St.PageFlip(mount, {
+    width: Math.round(single ? width : width / 2),
+    height: Math.round(height),
+    size: "fixed",
+    minWidth: 120,
+    maxWidth: 4000,
+    minHeight: 120,
+    maxHeight: 4000,
+    autoSize: false,
+    showCover: false,
+    usePortrait: single,
+    startPage: Math.max(0, state.page - 1),
+    drawShadow: true,
+    maxShadowOpacity: 0.4,
+    flippingTime: 500,
+    useMouseEvents: true,
+    swipeDistance: 30,
+    mobileScrollSupport: false,
+  });
+  flip.loadFromHTML(mount.querySelectorAll(".page-container"));
+  flip.on("flip", (e) => {
+    state.page = e.data + 1;
+    el("page").value = String(state.page);
+  });
+  state.flip = flip;
+}
+
+function goTo(page) {
+  const target = Math.min(Math.max(Number(page) || 1, 1), state.pages.length);
+  state.page = target;
+  el("page").value = String(target);
+  if (state.flip) state.flip.flip(target - 1);
+}
+
+function applyZoom() {
+  el("book").style.transform = "scale(" + state.zoom + ")";
+  el("book").style.transformOrigin = "center center";
+  el("zoom-value").textContent = Math.round(state.zoom * 100) + "%";
+}
+
+function buildBookmarks() {
+  const list = el("bookmarks");
+  list.innerHTML = "";
+  if (!state.bookmarks.length) {
+    const li = document.createElement("li");
+    li.className = "pg";
+    li.textContent = "Este documento no tiene índice.";
+    list.appendChild(li);
+    return;
+  }
+  for (const entry of state.bookmarks) {
+    const li = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.style.paddingLeft = 8 + (Number(entry.depth) || 0) * 12 + "px";
+    button.textContent = entry.title;
+    const pg = document.createElement("span");
+    pg.className = "pg";
+    pg.textContent = String(entry.page);
+    button.appendChild(pg);
+    button.addEventListener("click", () => goTo(entry.page));
+    li.appendChild(button);
+    list.appendChild(li);
+  }
+}
+
+function wireControls() {
+  el("prev").addEventListener("click", () => goTo(state.page - 1));
+  el("next").addEventListener("click", () => goTo(state.page + 1));
+  el("menu").addEventListener("click", () => goTo(state.config.menuPage));
+  el("page").addEventListener("change", (event) => goTo(event.target.value));
+  el("zoom-in").addEventListener("click", () => {
+    state.zoom = Math.min(3, Number((state.zoom + 0.1).toFixed(2)));
+    applyZoom();
+  });
+  el("zoom-out").addEventListener("click", () => {
+    state.zoom = Math.max(0.5, Number((state.zoom - 0.1).toFixed(2)));
+    applyZoom();
+  });
+  el("fullscreen").addEventListener("click", () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void document.documentElement.requestFullscreen();
+  });
+  el("toggle-index").addEventListener("click", () => {
+    const panel = el("index-panel");
+    panel.hidden = !panel.hidden;
+    buildBook();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.target instanceof HTMLInputElement) return;
+    if (event.key === "ArrowRight") goTo(state.page + 1);
+    if (event.key === "ArrowLeft") goTo(state.page - 1);
+  });
+
+  el("book").addEventListener(
+    "click",
+    (event) => {
+      const target = event.target.closest ? event.target.closest("[data-fb-action]") : null;
+      if (!target) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (target.dataset.fbAction === "page") {
+        goTo(Number(target.dataset.fbPage));
+        return;
+      }
+      const href = target.getAttribute("href");
+      if (href) window.open(href, "_blank", "noopener,noreferrer");
+    },
+    true,
+  );
+
+  let raf = 0;
+  window.addEventListener("resize", () => {
+    window.clearTimeout(raf);
+    raf = window.setTimeout(() => buildBook(), 150);
+  });
+}
+
+async function boot() {
+  if (location.protocol === "file:") {
+    el("file-warning").hidden = false;
+    el("status").textContent = "Inicia el servidor local incluido para ver el flipbook.";
+    return;
+  }
+  try {
+    const [config, bookmarks] = await Promise.all([
+      readJson("hotspots.json", { menuPage: 1, hotspots: [] }),
+      readJson("bookmarks.json", []),
+    ]);
+    state.config = {
+      menuPage: Number(config.menuPage) || 1,
+      hotspots: Array.isArray(config.hotspots) ? config.hotspots : [],
+    };
+    state.bookmarks = Array.isArray(bookmarks) ? bookmarks : [];
+    state.pages = await renderDocument();
+    state.page = 1;
+    el("count").textContent = "/ " + state.pages.length;
+    el("page").value = "1";
+    buildBookmarks();
+    buildBook();
+    applyZoom();
+    wireControls();
+    el("status").hidden = true;
+  } catch (error) {
+    console.error(error);
+    el("status").textContent = "No se ha podido cargar el flipbook: " + error.message;
+  }
+}
+
+void boot();

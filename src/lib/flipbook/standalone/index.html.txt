@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>__TITLE__</title>
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <button id="toggle-index" class="btn" type="button" title="Índice">☰ Índice</button>
+      <span class="title">__TITLE__</span>
+      <div class="spacer"></div>
+      <button id="prev" class="btn" type="button" title="Anterior">‹</button>
+      <input id="page" class="page-input" value="1" aria-label="Página" />
+      <span id="count" class="muted">/ 0</span>
+      <button id="next" class="btn" type="button" title="Siguiente">›</button>
+      <button id="menu" class="btn" type="button" title="Volver al menú">⌂ Menú</button>
+      <button id="zoom-out" class="btn" type="button" title="Reducir">−</button>
+      <span id="zoom-value" class="muted">100%</span>
+      <button id="zoom-in" class="btn" type="button" title="Ampliar">+</button>
+      <button id="fullscreen" class="btn" type="button" title="Pantalla completa">⛶</button>
+    </header>
+
+    <div class="body">
+      <aside id="index-panel" class="panel" hidden>
+        <h2>Índice</h2>
+        <ul id="bookmarks"></ul>
+      </aside>
+      <main class="stage">
+        <div id="status" class="status">Cargando flipbook…</div>
+        <div id="book" class="book"></div>
+      </main>
+    </div>
+
+    <div id="file-warning" class="overlay" hidden>
+      <div class="card">
+        <h2>Abre el flipbook con el servidor local</h2>
+        <p>
+          El navegador bloquea la lectura de archivos locales cuando se abre
+          <code>index.html</code> con doble clic. Todo funciona sin internet, solo hace falta
+          un pequeño servidor local incluido en esta carpeta:
+        </p>
+        <ul>
+          <li><b>Windows:</b> doble clic en <code>iniciar-windows.bat</code></li>
+          <li><b>macOS / Linux:</b> doble clic en <code>iniciar-mac-linux.command</code></li>
+          <li>
+            O bien, en una terminal dentro de esta carpeta:
+            <code>python3 -m http.server 8080</code> y abre
+            <code>http://localhost:8080</code>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <script src="libs/page-flip.browser.js"></script>
+    <script type="module" src="assets/viewer.js"></script>
+  </body>
+</html>

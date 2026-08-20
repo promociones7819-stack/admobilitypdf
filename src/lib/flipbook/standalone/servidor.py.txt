@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+"""Mini servidor local para ver el flipbook. No usa internet ni servicios externos."""
+import http.server
+import os
+import socketserver
+import threading
+import webbrowser
+
+PORT = 8080
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
+
+with socketserver.TCPServer(("127.0.0.1", PORT), Handler) as httpd:
+    url = f"http://localhost:{PORT}/index.html"
+    print(f"Flipbook disponible en {url}")
+    print("Pulsa Ctrl+C para detener el servidor.")
+    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\nServidor detenido.")

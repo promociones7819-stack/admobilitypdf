@@ -1,0 +1,6 @@
+@echo off
+cd /d "%~dp0"
+where py >nul 2>nul && (py servidor.py & goto :eof)
+where python >nul 2>nul && (python servidor.py & goto :eof)
+echo No se ha encontrado Python. Instalalo desde https://www.python.org/downloads/
+pause
