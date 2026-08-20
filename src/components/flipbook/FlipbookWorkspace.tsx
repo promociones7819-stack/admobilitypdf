@@ -593,6 +593,26 @@ export function FlipbookWorkspace() {
         </DialogContent>
       </Dialog>
 
+      <AutoMenuDialog
+        open={autoMenu}
+        onOpenChange={setAutoMenu}
+        outline={doc.outline}
+        menuPage={page}
+        pageCount={pageCount}
+        pageSize={currentPage ? { width: currentPage.width, height: currentPage.height } : null}
+        onCreate={(created) => {
+          setConfig((prev) => ({ ...prev, hotspots: [...prev.hotspots, ...created] }));
+          const first = created[0];
+          if (first) {
+            setSelectedId(first.id);
+            goToPage(first.page);
+          }
+          toast.success(`Menú creado con ${created.length} enlaces`);
+        }}
+      />
+
+
+
       <input
         ref={openRef}
         type="file"
