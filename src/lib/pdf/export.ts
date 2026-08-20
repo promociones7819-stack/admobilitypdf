@@ -94,6 +94,13 @@ function standardFontName(group: string | undefined, bold: boolean, italic: bool
         : StandardFonts.Helvetica;
 }
 
+/** Families that had to fall back to a base-14 font during the last export. */
+let lastFontFallbacks: string[] = [];
+
+export function getFontFallbacks(): string[] {
+  return lastFontFallbacks;
+}
+
 async function createFontResolver(out: PDFDocument): Promise<FontResolver> {
   const cache = new Map<string, ResolvedFont>();
   let fontkitReady = false;
@@ -106,8 +113,7 @@ async function createFontResolver(out: PDFDocument): Promise<FontResolver> {
 
     let resolved: ResolvedFont | null = null;
     if (def.kind === "embedded") {
-      const url = embeddedFontUrl(def, bold, italic);
-      if (url) {
+      for (const url of embeddedFontUrls(def, bold, italic)) {
         try {
           if (!fontkitReady) {
             const fontkit = (await import("@pdf-lib/fontkit")).default;
@@ -117,10 +123,14 @@ async function createFontResolver(out: PDFDocument): Promise<FontResolver> {
           const bytes = await fetchTtf(url);
           const font = await out.embedFont(bytes.slice(0), { subset: true });
           resolved = { font, embedded: true };
-        } catch {
+          break;
+        } catch (error) {
+          console.warn(`[pdf] no se pudo incrustar ${def.family} desde ${url}`, error);
           resolved = null;
         }
       }
+      if (!resolved && !lastFontFallbacks.includes(def.label))
+        lastFontFallbacks = [...lastFontFallbacks, def.label];
     }
     if (!resolved) {
       const font = await out.embedFont(standardFontName(def.standard, bold, italic));
