@@ -280,14 +280,20 @@ export function FlipbookWorkspace() {
         </div>
 
         {mode === "edit" && (
-          <Button
-            variant={adding ? "default" : "outline"}
-            size="sm"
-            onClick={() => setAdding((value) => !value)}
-          >
-            <Plus className="mr-2 size-4" /> {adding ? "Dibuja el rectángulo" : "Añadir hotspot"}
-          </Button>
+          <>
+            <Button
+              variant={adding ? "default" : "outline"}
+              size="sm"
+              onClick={() => setAdding((value) => !value)}
+            >
+              <Plus className="mr-2 size-4" /> {adding ? "Dibuja el rectángulo" : "Añadir hotspot"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setAutoMenu(true)}>
+              <Wand2 className="mr-2 size-4" /> Crear menú automáticamente
+            </Button>
+          </>
         )}
+
 
         <div className="mx-1 h-6 w-px bg-border" />
         <Button variant="ghost" size="icon" aria-label="Página anterior" onClick={() => goToPage(page - 1)}>
