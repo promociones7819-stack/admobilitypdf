@@ -47,25 +47,56 @@ const EMPTY_DOC: DocState = { pages: [], annotations: [] };
 export function friendlyError(error: unknown): string {
   const name = (error as { name?: string })?.name ?? "";
   const message = error instanceof Error ? error.message : String(error);
+  console.error("[pdf] error", name, message, error);
   if (name === "PasswordException" || /password|encrypt/i.test(message))
     return "El archivo está protegido con contraseña.";
   if (message === "file-too-large") return "El archivo supera el tamaño permitido (150 MB).";
   if (message === "not-a-pdf") return "Solo se admiten archivos PDF.";
+  if (message === "empty-file")
+    return "El archivo está vacío o no se ha podido leer del todo (prueba a descargarlo antes desde Archivos/iCloud).";
   if (message === "unsupported-image") return "Solo se admiten imágenes PNG o JPG.";
   if (message === "empty-document") return "El documento no tiene páginas.";
   if (error instanceof PdfError) return "No se ha podido exportar el PDF.";
-  return "El PDF no se puede abrir.";
+  return `El PDF no se puede abrir${message ? ` (${message})` : ""}.`;
+}
+
+/** Rebuilds a damaged PDF with pdf-lib so pdf.js can open it. */
+async function repairBytes(bytes: Uint8Array): Promise<Uint8Array> {
+  const { PDFDocument } = await import("pdf-lib");
+  const doc = await PDFDocument.load(bytes.slice(0), {
+    ignoreEncryption: true,
+    throwOnInvalidObject: false,
+    updateMetadata: false,
+  });
+  return doc.save({ useObjectStreams: false });
 }
 
 async function loadSource(file: File): Promise<PdfSource> {
   if (file.size > MAX_BYTES) throw new Error("file-too-large");
-  if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf")
-    throw new Error("not-a-pdf");
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  const looksPdf = /\.pdf$/i.test(file.name) || file.type === "application/pdf";
+  let bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.byteLength === 0) throw new Error("empty-file");
+  const header = new TextDecoder().decode(bytes.slice(0, 1024));
+  if (!looksPdf && !header.includes("%PDF")) throw new Error("not-a-pdf");
   const pdfjs = await getPdfjs();
-  const doc = await pdfjs.getDocument({ data: bytes.slice(0) }).promise;
+
+  const open = (data: Uint8Array) => pdfjs.getDocument({ data: data.slice(0) }).promise;
+
+  let doc;
+  try {
+    doc = await open(bytes);
+  } catch (error) {
+    const name = (error as { name?: string })?.name ?? "";
+    if (name === "PasswordException") throw error;
+    // Muchos PDFs (escaneados, generados por apps móviles) tienen el índice
+    // dañado: pdf-lib los reconstruye y entonces sí se pueden abrir.
+    console.warn("[pdf] reintentando tras reparar el archivo", error);
+    bytes = await repairBytes(bytes);
+    doc = await open(bytes);
+  }
   return { id: makeId("src"), name: file.name, bytes, doc, pageCount: doc.numPages };
 }
+
 
 interface EditorContextValue {
   sources: Record<string, PdfSource>;
