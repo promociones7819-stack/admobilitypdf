@@ -117,6 +117,9 @@ export const FONT_CATALOG: FontDefinition[] = [
     kind: "embedded",
     css: '"Patrick Hand", "Comic Sans MS", cursive',
     files: { regular: "/fonts/PatrickHand-Regular.ttf" },
+    cdn: {
+      regular: "https://fonts.gstatic.com/s/patrickhand/v25/LDI1apSQOAYtSuYWp8ZhfYeMWQ.ttf",
+    },
   },
 ];
 
