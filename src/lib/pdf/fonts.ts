@@ -137,12 +137,26 @@ export function fontCss(family: string | undefined): string {
   return findFont(family).css;
 }
 
-/** Picks the TTF url that best matches the requested weight/style. */
-export function embeddedFontUrl(def: FontDefinition, bold: boolean, italic: boolean) {
-  const files = def.files;
-  if (!files) return null;
+function pickVariant(files: FontVariantFiles, bold: boolean, italic: boolean) {
   if (bold && italic) return files.boldItalic ?? files.bold ?? files.italic ?? files.regular;
   if (bold) return files.bold ?? files.regular;
   if (italic) return files.italic ?? files.regular;
   return files.regular;
+}
+
+/** Picks the TTF url that best matches the requested weight/style. */
+export function embeddedFontUrl(def: FontDefinition, bold: boolean, italic: boolean) {
+  return def.files ? pickVariant(def.files, bold, italic) : null;
+}
+
+/**
+ * All candidate TTF urls for a family variant, in priority order: the local
+ * file first, then the CDN copy (used when the local asset is unavailable).
+ */
+export function embeddedFontUrls(def: FontDefinition, bold: boolean, italic: boolean): string[] {
+  const urls = [
+    def.files ? pickVariant(def.files, bold, italic) : null,
+    def.cdn ? pickVariant(def.cdn, bold, italic) : null,
+  ].filter((u): u is string => !!u);
+  return Array.from(new Set(urls));
 }
