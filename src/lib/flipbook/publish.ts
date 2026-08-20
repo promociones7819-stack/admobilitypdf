@@ -5,11 +5,20 @@
  * locales (pdf.js + StPageFlip), la configuración de hotspots, el índice del
  * PDF y un visor estático. No interviene ningún servidor ni API.
  */
-// Se importan como texto (?raw) para copiar el código original sin que el
-// bundler lo transforme: el visor autónomo debe funcionar sin dev server.
-import pdfLibSource from "pdfjs-dist/build/pdf.min.mjs?raw";
-import pdfWorkerSource from "pdfjs-dist/build/pdf.worker.min.mjs?raw";
-import pageFlipSource from "page-flip/dist/js/page-flip.browser.js?raw";
+// Las librerías del visor se sirven como archivos estáticos desde /flipbook-libs
+// y se descargan en el navegador al exportar: así se copian sin que el bundler
+// las transforme y sin inflar el bundle del servidor.
+const LIB_FILES = [
+  { name: "pdf.min.mjs", url: "/flipbook-libs/pdf.min.mjs" },
+  { name: "pdf.worker.min.mjs", url: "/flipbook-libs/pdf.worker.min.mjs" },
+  { name: "page-flip.browser.js", url: "/flipbook-libs/page-flip.browser.js" },
+] as const;
+
+async function fetchLib(url: string): Promise<ArrayBuffer> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`No se pudo leer la librería ${url} (${res.status})`);
+  return res.arrayBuffer();
+}
 
 import indexHtml from "./standalone/index.html.txt?raw";
 import viewerJs from "./standalone/viewer.js.txt?raw";
@@ -64,9 +73,10 @@ export async function buildFlipbookZip(options: {
   assets.file("styles.css", stylesCss);
 
   const libs = folder.folder("libs")!;
-  libs.file("pdf.min.mjs", pdfLibSource);
-  libs.file("pdf.worker.min.mjs", pdfWorkerSource);
-  libs.file("page-flip.browser.js", pageFlipSource);
+  const sources = await Promise.all(LIB_FILES.map((lib) => fetchLib(lib.url)));
+  LIB_FILES.forEach((lib, index) => {
+    libs.file(lib.name, sources[index]!);
+  });
 
   return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
 }
