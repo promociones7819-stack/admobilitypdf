@@ -5,6 +5,8 @@ import {
   ChevronRight,
   Copy,
   Download,
+  FileArchive,
+  FileJson,
   Home,
   List,
   MousePointer2,
@@ -42,6 +44,15 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { buildFlipbookZip, publicationName } from "@/lib/flipbook/publish";
 import { loadFlipbookDocument, type FlipbookDocument } from "@/lib/flipbook/document";
 import {
   documentKey,
@@ -84,6 +95,8 @@ export function FlipbookWorkspace() {
   const [adding, setAdding] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [autoMenu, setAutoMenu] = useState(false);
+  const [srcFile, setSrcFile] = useState<File | null>(null);
+  const [publishing, setPublishing] = useState(false);
 
   const [dialog, setDialog] = useState<{ id: string; kind: DraftKind; targetPage: string; url: string } | null>(
     null,
@@ -116,6 +129,7 @@ export function FlipbookWorkspace() {
       const loaded = await loadFlipbookDocument(file, (done, total) => setLoading({ done, total }));
       const key = documentKey(file);
       setDoc(loaded);
+      setSrcFile(file);
       setDocName(file.name);
       setStorageKey(key);
       setConfig(loadConfig(key));
@@ -214,6 +228,31 @@ export function FlipbookWorkspace() {
     await saveBlob(new Blob([json], { type: "application/json" }), `${docName || "flipbook"}.hotspots.json`);
     toast.success("Configuración exportada");
   };
+
+  /** Exporta la publicación completa: PDF + visor + librerías + hotspots + índice. */
+  const exportPublication = async () => {
+    if (!srcFile || !doc) {
+      toast.error("Abre de nuevo el PDF para poder exportar el flipbook.");
+      return;
+    }
+    setPublishing(true);
+    try {
+      const zip = await buildFlipbookZip({
+        file: srcFile,
+        docName,
+        config,
+        outline: doc.outline,
+      });
+      await saveBlob(zip, `${publicationName(docName)}-flipbook.zip`);
+      toast.success("Flipbook autocontenido exportado (.zip)");
+    } catch (error) {
+      console.error("[flipbook] exportación fallida", error);
+      toast.error("No se ha podido generar el ZIP del flipbook.");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
 
   const importConfig = async (file: File) => {
     try {
@@ -372,9 +411,31 @@ export function FlipbookWorkspace() {
               </SheetContent>
             </Sheet>
           )}
-          <Button variant="ghost" size="sm" onClick={() => void exportConfig()}>
-            <Download className="mr-2 size-4" /> Exportar
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" disabled={publishing}>
+                <Download className="mr-2 size-4" />
+                {publishing ? "Generando ZIP…" : "Exportar"}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              <DropdownMenuLabel>Exportar</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => void exportPublication()}>
+                <FileArchive className="mr-2 size-4" />
+                <span className="flex flex-col">
+                  <span>Flipbook completo (.zip)</span>
+                  <span className="text-xs text-muted-foreground">
+                    PDF, visor, hotspots e índice para uso local
+                  </span>
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => void exportConfig()}>
+                <FileJson className="mr-2 size-4" />
+                Exportar configuración JSON
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="ghost" size="sm" onClick={() => importRef.current?.click()}>
             <Upload className="mr-2 size-4" /> Importar
           </Button>

@@ -1,5 +1,13 @@
 import { useRef, useState } from "react";
-import { FilePlus2, FileType2, Layers, Loader2, ShieldCheck, UploadCloud } from "lucide-react";
+import {
+  BookOpen,
+  FilePlus2,
+  FileType2,
+  Layers,
+  Loader2,
+  ShieldCheck,
+  UploadCloud,
+} from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -81,6 +89,11 @@ export function StartScreen() {
           <Button asChild variant="ghost" size="sm">
             <Link to="/convertir">
               <FileType2 className="mr-2 size-4" /> Convertir Word ⇄ PDF
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/flipbook">
+              <BookOpen className="mr-2 size-4" /> Crear flipbook interactivo
             </Link>
           </Button>
         </div>
