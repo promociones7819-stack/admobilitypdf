@@ -81,6 +81,8 @@ export function FlipbookWorkspace() {
   const [zoom, setZoom] = useState(1);
   const [adding, setAdding] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [autoMenu, setAutoMenu] = useState(false);
+
   const [dialog, setDialog] = useState<{ id: string; kind: DraftKind; targetPage: string; url: string } | null>(
     null,
   );
