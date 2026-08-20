@@ -64,9 +64,9 @@ export async function buildFlipbookZip(options: {
   assets.file("styles.css", stylesCss);
 
   const libs = folder.folder("libs")!;
-  libs.file("pdf.min.mjs", pdfLib);
-  libs.file("pdf.worker.min.mjs", pdfWorker);
-  libs.file("page-flip.browser.js", pageFlip);
+  libs.file("pdf.min.mjs", pdfLibSource);
+  libs.file("pdf.worker.min.mjs", pdfWorkerSource);
+  libs.file("page-flip.browser.js", pageFlipSource);
 
   return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
 }
