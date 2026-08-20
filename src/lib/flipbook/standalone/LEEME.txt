@@ -17,17 +17,18 @@ Contenido
 Cómo abrirlo
 ------------
 Los navegadores bloquean la lectura de archivos locales al abrir index.html
-con doble clic (protocolo file://). Usa el mini servidor local incluido:
+con doble clic (protocolo file://). Usa el servidor local incluido:
+
+  1) Abre una terminal en esta carpeta
+  2) npm install
+  3) npm run start
+  4) Abre http://localhost:8080
+
+Sin Node.js:
 
   Windows        -> doble clic en iniciar-windows.bat
   macOS / Linux  -> doble clic en iniciar-mac-linux.command
-                    (si no arranca: clic derecho > Abrir)
-
-Manualmente, desde una terminal en esta carpeta:
-
-  python3 -m http.server 8080
-
-y abre http://localhost:8080 en el navegador.
+  o bien:  python3 -m http.server 8080
 
 Esta carpeta se puede copiar a otro ordenador o a un USB y seguirá
 funcionando exactamente igual.
