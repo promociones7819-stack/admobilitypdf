@@ -91,7 +91,7 @@ async function loadSource(file: File): Promise<PdfSource> {
     // Muchos PDFs (escaneados, generados por apps móviles) tienen el índice
     // dañado: pdf-lib los reconstruye y entonces sí se pueden abrir.
     console.warn("[pdf] reintentando tras reparar el archivo", error);
-    bytes = await repairBytes(bytes);
+    bytes = new Uint8Array(await repairBytes(bytes));
     doc = await open(bytes);
   }
   return { id: makeId("src"), name: file.name, bytes, doc, pageCount: doc.numPages };
