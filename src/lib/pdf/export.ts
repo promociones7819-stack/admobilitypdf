@@ -402,6 +402,7 @@ export async function buildPdf(
   const assets = options.images ?? {};
   const coverMode = options.coverMode ?? "omit";
 
+  lastFontFallbacks = [];
   const resolveFont = await createFontResolver(out);
   const embeddedImages = new Map<string, unknown>();
 
