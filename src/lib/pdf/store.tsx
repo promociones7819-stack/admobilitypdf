@@ -58,7 +58,11 @@ export function friendlyError(error: unknown): string {
   if (message === "empty-document") return "El documento no tiene páginas.";
   if (message === "invalid-pdf")
     return "El archivo está dañado o usa una estructura PDF no compatible. Prueba a abrirlo y volverlo a guardar desde Archivos o Vista Previa.";
-  if (error instanceof PdfError) return "No se ha podido exportar el PDF.";
+  if (error instanceof PdfError) {
+    if (message === "corrupt-source")
+      return "Uno de los PDF está dañado y no se puede combinar. Ábrelo y vuelve a guardarlo desde Archivos o Vista Previa antes de intentarlo de nuevo.";
+    return "No se ha podido exportar el PDF.";
+  }
   return `El PDF no se puede abrir${message ? ` (${message})` : ""}.`;
 }
 

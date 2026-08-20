@@ -35,7 +35,26 @@ async function loadLibDocs(
   for (const sourceId of ids) {
     const source = sources[sourceId];
     if (!source) throw new PdfError("missing-source");
-    map.set(sourceId, await PDFDocument.load(source.bytes.slice(0), { ignoreEncryption: true }));
+    try {
+      // pdf.js tolerates some broken cross-reference tables that pdf-lib later
+      // rejects while copyPages walks the page tree. Re-saving first rebuilds
+      // those references and prevents the opaque "Expected instance of…" error.
+      const parsed = await PDFDocument.load(source.bytes.slice(0), {
+        ignoreEncryption: true,
+        throwOnInvalidObject: false,
+        updateMetadata: false,
+      });
+      const normalizedBytes = await parsed.save({ useObjectStreams: false });
+      const normalized = await PDFDocument.load(normalizedBytes, {
+        ignoreEncryption: true,
+        throwOnInvalidObject: false,
+        updateMetadata: false,
+      });
+      map.set(sourceId, normalized);
+    } catch (error) {
+      console.error(`[pdf] no se pudo normalizar ${source.name}`, error);
+      throw new PdfError("corrupt-source");
+    }
   }
   return map;
 }
@@ -419,7 +438,13 @@ export async function buildPdf(
     } else {
       const src = libDocs.get(entry.sourceId);
       if (!src) throw new PdfError("missing-source");
-      const [copied] = await out.copyPages(src, [entry.sourceIndex - 1]);
+      let copied: PDFPage | undefined;
+      try {
+        [copied] = await out.copyPages(src, [entry.sourceIndex - 1]);
+      } catch (error) {
+        console.error(`[pdf] no se pudo copiar la página ${entry.sourceIndex}`, error);
+        throw new PdfError("corrupt-source");
+      }
       if (!copied) throw new PdfError("missing-page");
       rotation = normalizeRotation(copied.getRotation().angle + entry.rotation);
       copied.setRotation(degrees(rotation));
