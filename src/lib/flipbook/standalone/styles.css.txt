@@ -94,6 +94,7 @@ body {
   padding: 24px;
   z-index: 50;
 }
+.overlay[hidden] { display: none; }
 .card {
   max-width: 560px;
   background: var(--panel);
