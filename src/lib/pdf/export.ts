@@ -16,6 +16,7 @@ import {
   type Annotation,
   type ImageAsset,
 } from "./annotations";
+import { saveBytes } from "@/lib/download";
 import { embeddedFontUrls, findFont } from "./fonts";
 
 export class PdfError extends Error {}
@@ -469,18 +470,8 @@ export async function buildPdf(
   return out.save();
 }
 
-export function downloadBytes(bytes: Uint8Array, fileName: string) {
-  const buffer = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(buffer).set(bytes);
-  const blob = new Blob([buffer], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
+export async function downloadBytes(bytes: Uint8Array, fileName: string) {
+  await saveBytes(bytes, fileName, "application/pdf");
 }
 
 export function editedFileName(original: string | null): string {
