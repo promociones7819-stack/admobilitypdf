@@ -23,7 +23,10 @@ async function fetchLib(url: string): Promise<ArrayBuffer> {
 import indexHtml from "./standalone/index.html.txt?raw";
 import viewerJs from "./standalone/viewer.js.txt?raw";
 import stylesCss from "./standalone/styles.css.txt?raw";
-import readme from "./standalone/LEEME.txt?raw";
+import readme from "./standalone/README.txt?raw";
+import leeme from "./standalone/LEEME.txt?raw";
+import packageJson from "./standalone/package.json.txt?raw";
+import serverMjs from "./standalone/server.mjs.txt?raw";
 import serverPy from "./standalone/servidor.py.txt?raw";
 import startWin from "./standalone/iniciar-windows.bat.txt?raw";
 import startUnix from "./standalone/iniciar-mac-linux.command.txt?raw";
