@@ -1,6 +1,8 @@
 import { useRef } from "react";
 import {
+  BookOpen,
   Download,
+
   FilePlus2,
   Layers,
   Loader2,
@@ -118,10 +120,16 @@ export function TopBar({ onToggleThumbs }: { onToggleThumbs: () => void }) {
           </Link>
         </Button>
         <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
+          <Link to="/flipbook">
+            <BookOpen className="mr-2 size-4" /> Flipbook
+          </Link>
+        </Button>
+        <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
           <Link to="/ocr">
             <ScanText className="mr-2 size-4" /> OCR
           </Link>
         </Button>
+
         <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
           <Link to="/ia">
             <Sparkles className="mr-2 size-4" /> IA Documentos

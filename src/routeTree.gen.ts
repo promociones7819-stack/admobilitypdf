@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ConvertirRouteImport } from './routes/convertir'
+import { Route as FlipbookRouteImport } from './routes/flipbook'
 import { Route as IaRouteImport } from './routes/ia'
 import { Route as OcrRouteImport } from './routes/ocr'
 
@@ -22,6 +23,11 @@ const IndexRoute = IndexRouteImport.update({
 const ConvertirRoute = ConvertirRouteImport.update({
   id: '/convertir',
   path: '/convertir',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FlipbookRoute = FlipbookRouteImport.update({
+  id: '/flipbook',
+  path: '/flipbook',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IaRoute = IaRouteImport.update({
@@ -38,12 +44,14 @@ const OcrRoute = OcrRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/convertir': typeof ConvertirRoute
+  '/flipbook': typeof FlipbookRoute
   '/ia': typeof IaRoute
   '/ocr': typeof OcrRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/convertir': typeof ConvertirRoute
+  '/flipbook': typeof FlipbookRoute
   '/ia': typeof IaRoute
   '/ocr': typeof OcrRoute
 }
@@ -51,20 +59,22 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/convertir': typeof ConvertirRoute
+  '/flipbook': typeof FlipbookRoute
   '/ia': typeof IaRoute
   '/ocr': typeof OcrRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/convertir' | '/ia' | '/ocr'
+  fullPaths: '/' | '/convertir' | '/flipbook' | '/ia' | '/ocr'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/convertir' | '/ia' | '/ocr'
-  id: '__root__' | '/' | '/convertir' | '/ia' | '/ocr'
+  to: '/' | '/convertir' | '/flipbook' | '/ia' | '/ocr'
+  id: '__root__' | '/' | '/convertir' | '/flipbook' | '/ia' | '/ocr'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ConvertirRoute: typeof ConvertirRoute
+  FlipbookRoute: typeof FlipbookRoute
   IaRoute: typeof IaRoute
   OcrRoute: typeof OcrRoute
 }
@@ -83,6 +93,13 @@ declare module '@tanstack/react-router' {
       path: '/convertir'
       fullPath: '/convertir'
       preLoaderRoute: typeof ConvertirRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/flipbook': {
+      id: '/flipbook'
+      path: '/flipbook'
+      fullPath: '/flipbook'
+      preLoaderRoute: typeof FlipbookRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ia': {
@@ -105,6 +122,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ConvertirRoute: ConvertirRoute,
+  FlipbookRoute: FlipbookRoute,
   IaRoute: IaRoute,
   OcrRoute: OcrRoute,
 }
