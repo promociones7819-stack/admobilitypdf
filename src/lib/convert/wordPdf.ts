@@ -1,3 +1,4 @@
+import { saveBlob } from "@/lib/download";
 // Conversión local Word <-> PDF. Todo ocurre en el navegador:
 // DOCX -> HTML (mammoth) -> maquetado con pdf-lib.
 // PDF -> texto por páginas (pdf.js) -> DOCX (docx).
@@ -213,16 +214,8 @@ export async function pdfToDocx(
   return Packer.toBlob(output);
 }
 
-export function downloadBlob(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.rel = "noopener";
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
+export async function downloadBlob(blob: Blob, name: string) {
+  await saveBlob(blob, name);
 }
 
 export function swapExtension(name: string, extension: string): string {

@@ -450,7 +450,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
         images,
         coverMode: coverExport,
       });
-      downloadBytes(bytes, editedFileName(fileName));
+      await downloadBytes(bytes, editedFileName(fileName));
       const fallbacks = getFontFallbacks();
       if (fallbacks.length)
         toast.warning(
@@ -473,7 +473,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
           coverMode: coverExport,
         });
         const base = (fileName ?? "documento").replace(/\.pdf$/i, "");
-        downloadBytes(bytes, `${base}-extraido.pdf`);
+        await downloadBytes(bytes, `${base}-extraido.pdf`);
       } finally {
         setBusy(false);
       }

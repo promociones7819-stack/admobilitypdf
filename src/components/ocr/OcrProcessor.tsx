@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getPdfjs } from "@/lib/pdf/pdfjs";
+import { saveBlob } from "@/lib/download";
 
 type Lang = "spa" | "eng";
 
@@ -96,16 +97,10 @@ export function OcrProcessor() {
     }
   }
 
-  function downloadTxt() {
+  async function downloadTxt() {
     const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = (fileName ?? "documento.pdf").replace(/\.pdf$/i, "") + "-ocr.txt";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    const name = (fileName ?? "documento.pdf").replace(/\.pdf$/i, "") + "-ocr.txt";
+    await saveBlob(blob, name);
   }
 
   return (
