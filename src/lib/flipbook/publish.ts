@@ -73,9 +73,10 @@ export async function buildFlipbookZip(options: {
   assets.file("styles.css", stylesCss);
 
   const libs = folder.folder("libs")!;
-  libs.file("pdf.min.mjs", pdfLibSource);
-  libs.file("pdf.worker.min.mjs", pdfWorkerSource);
-  libs.file("page-flip.browser.js", pageFlipSource);
+  const sources = await Promise.all(LIB_FILES.map((lib) => fetchLib(lib.url)));
+  LIB_FILES.forEach((lib, index) => {
+    libs.file(lib.name, sources[index]!);
+  });
 
   return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
 }
