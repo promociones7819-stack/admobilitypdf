@@ -3,5 +3,11 @@ cd "$(dirname "$0")" || exit 1
 if command -v python3 >/dev/null 2>&1; then
   exec python3 servidor.py
 fi
-echo "No se ha encontrado python3. Instalalo y vuelve a intentarlo."
+echo ""
+echo "  No se ha encontrado Python 3 en este equipo."
+echo "  Instalalo gratis desde: https://www.python.org/downloads/"
+echo "  En macOS tambien puedes ejecutar: xcode-select --install"
+echo "  Despues vuelve a hacer doble clic en este archivo."
+echo ""
+printf "Pulsa Enter para cerrar..."
 read -r _
