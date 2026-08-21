@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>__TITLE__</title>
+    <style>
+__CSS__
+    </style>
+  </head>
+  <body>
+    <header class="bar">
+      <button id="toggle-index" class="btn" type="button" title="Índice">☰ Índice</button>
+      <span class="title">__TITLE__</span>
+      <div class="spacer"></div>
+      <button id="prev" class="btn" type="button" title="Anterior">‹</button>
+      <input id="page" class="page-input" value="1" aria-label="Página" />
+      <span id="count" class="muted">/ 0</span>
+      <button id="next" class="btn" type="button" title="Siguiente">›</button>
+      <button id="menu" class="btn" type="button" title="Volver al menú">⌂ Menú</button>
+      <button id="zoom-out" class="btn" type="button" title="Reducir">−</button>
+      <span id="zoom-value" class="muted">100%</span>
+      <button id="zoom-in" class="btn" type="button" title="Ampliar">+</button>
+      <button id="fullscreen" class="btn" type="button" title="Pantalla completa">⛶</button>
+    </header>
+
+    <div class="body">
+      <aside id="index-panel" class="panel" hidden>
+        <h2>Índice</h2>
+        <ul id="bookmarks"></ul>
+      </aside>
+      <main class="stage">
+        <div id="status" class="status">Cargando flipbook…</div>
+        <div id="book" class="book"></div>
+      </main>
+    </div>
+
+    <script id="flipbook-data" type="application/json">
+__DATA__
+    </script>
+    <script>
+__PAGEFLIP__
+    </script>
+    <script>
+__VIEWER__
+    </script>
+  </body>
+</html>

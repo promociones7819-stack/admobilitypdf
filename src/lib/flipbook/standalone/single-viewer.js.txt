@@ -1,0 +1,263 @@
+// Visor flipbook autónomo: un solo archivo HTML, sin red, sin servidor.
+(function () {
+  var el = function (id) { return document.getElementById(id); };
+  var data = JSON.parse(document.getElementById("flipbook-data").textContent);
+  var state = {
+    pages: data.pages || [],
+    menuPage: Number(data.menuPage) || 1,
+    hotspots: Array.isArray(data.hotspots) ? data.hotspots : [],
+    bookmarks: Array.isArray(data.bookmarks) ? data.bookmarks : [],
+    flip: null,
+    page: 1,
+    zoom: 1,
+  };
+
+  function resolveTargetPage(hotspot) {
+    var action = hotspot.action || {};
+    if (action.type === "page") return action.targetPage;
+    if (action.type === "menu") return state.menuPage;
+    return null;
+  }
+
+  function place(overlay, node, top, left, width, height) {
+    node.className = "hotspot";
+    node.style.top = top + "%";
+    node.style.left = left + "%";
+    node.style.width = width + "%";
+    node.style.height = height + "%";
+    overlay.appendChild(node);
+  }
+
+  function buildPageElement(page) {
+    var wrapper = document.createElement("div");
+    wrapper.className = "page-container";
+    wrapper.dataset.pageNumber = String(page.number);
+
+    var img = document.createElement("img");
+    img.src = page.image;
+    img.alt = "Página " + page.number;
+    img.draggable = false;
+    img.style.cssText =
+      "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;user-select:none;";
+    wrapper.appendChild(img);
+
+    var overlay = document.createElement("div");
+    overlay.style.cssText = "position:absolute;inset:0;";
+
+    (page.links || []).forEach(function (link) {
+      var a = document.createElement("a");
+      if (link.url) {
+        a.href = link.url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.dataset.fbAction = "url";
+      } else {
+        a.href = "#page=" + link.targetPage;
+        a.dataset.fbAction = "page";
+        a.dataset.fbPage = String(link.targetPage);
+      }
+      place(overlay, a, link.top, link.left, link.width, link.height);
+    });
+
+    state.hotspots.forEach(function (hotspot) {
+      if (hotspot.page !== page.number) return;
+      var target = resolveTargetPage(hotspot);
+      var a = document.createElement("a");
+      a.title = hotspot.label || "";
+      if (target) {
+        a.href = "#page=" + target;
+        a.dataset.fbAction = "page";
+        a.dataset.fbPage = String(target);
+      } else if (hotspot.action && hotspot.action.type === "url") {
+        a.href = hotspot.action.url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.dataset.fbAction = "url";
+      }
+      place(
+        overlay,
+        a,
+        (hotspot.y / page.height) * 100,
+        (hotspot.x / page.width) * 100,
+        (hotspot.width / page.width) * 100,
+        (hotspot.height / page.height) * 100,
+      );
+    });
+
+    wrapper.appendChild(overlay);
+    return wrapper;
+  }
+
+  function buildBook() {
+    var host = el("book");
+    var box = host.parentElement;
+    var first = state.pages[0];
+    if (!first) return;
+    var aspect = first.width / first.height;
+    var single = box.clientWidth < 760;
+    var available = {
+      width: Math.max(240, box.clientWidth - 24),
+      height: Math.max(240, box.clientHeight - 24),
+    };
+    var spreadAspect = single ? aspect : aspect * 2;
+    var width = available.width;
+    var height = width / spreadAspect;
+    if (height > available.height) {
+      height = available.height;
+      width = height * spreadAspect;
+    }
+
+    try {
+      if (state.flip) state.flip.destroy();
+    } catch (e) { /* noop */ }
+    host.innerHTML = "";
+    host.style.width = Math.round(width) + "px";
+    host.style.height = Math.round(height) + "px";
+    var mount = document.createElement("div");
+    mount.style.cssText = "width:" + Math.round(width) + "px;height:" + Math.round(height) + "px;";
+    host.appendChild(mount);
+
+    state.pages.forEach(function (page) {
+      var node = buildPageElement(page);
+      node.style.width = Math.round(single ? width : width / 2) + "px";
+      node.style.height = Math.round(height) + "px";
+      mount.appendChild(node);
+    });
+
+    var flip = new window.St.PageFlip(mount, {
+      width: Math.round(single ? width : width / 2),
+      height: Math.round(height),
+      size: "fixed",
+      minWidth: 120,
+      maxWidth: 4000,
+      minHeight: 120,
+      maxHeight: 4000,
+      autoSize: false,
+      showCover: false,
+      usePortrait: single,
+      startPage: Math.max(0, state.page - 1),
+      drawShadow: true,
+      maxShadowOpacity: 0.4,
+      flippingTime: 500,
+      useMouseEvents: true,
+      swipeDistance: 30,
+      mobileScrollSupport: false,
+    });
+    flip.loadFromHTML(mount.querySelectorAll(".page-container"));
+    flip.on("flip", function (e) {
+      state.page = e.data + 1;
+      el("page").value = String(state.page);
+    });
+    state.flip = flip;
+  }
+
+  function goTo(page) {
+    var target = Math.min(Math.max(Number(page) || 1, 1), state.pages.length);
+    state.page = target;
+    el("page").value = String(target);
+    if (state.flip) state.flip.flip(target - 1);
+  }
+
+  function applyZoom() {
+    el("book").style.transform = "scale(" + state.zoom + ")";
+    el("book").style.transformOrigin = "center center";
+    el("zoom-value").textContent = Math.round(state.zoom * 100) + "%";
+  }
+
+  function buildBookmarks() {
+    var list = el("bookmarks");
+    list.innerHTML = "";
+    if (!state.bookmarks.length) {
+      var empty = document.createElement("li");
+      empty.className = "pg";
+      empty.textContent = "Este documento no tiene índice.";
+      list.appendChild(empty);
+      return;
+    }
+    state.bookmarks.forEach(function (entry) {
+      var li = document.createElement("li");
+      var button = document.createElement("button");
+      button.type = "button";
+      button.style.paddingLeft = 8 + (Number(entry.depth) || 0) * 12 + "px";
+      button.textContent = entry.title;
+      var pg = document.createElement("span");
+      pg.className = "pg";
+      pg.textContent = String(entry.page);
+      button.appendChild(pg);
+      button.addEventListener("click", function () { goTo(entry.page); });
+      li.appendChild(button);
+      list.appendChild(li);
+    });
+  }
+
+  function wireControls() {
+    el("prev").addEventListener("click", function () { goTo(state.page - 1); });
+    el("next").addEventListener("click", function () { goTo(state.page + 1); });
+    el("menu").addEventListener("click", function () { goTo(state.menuPage); });
+    el("page").addEventListener("change", function (event) { goTo(event.target.value); });
+    el("zoom-in").addEventListener("click", function () {
+      state.zoom = Math.min(3, Number((state.zoom + 0.1).toFixed(2)));
+      applyZoom();
+    });
+    el("zoom-out").addEventListener("click", function () {
+      state.zoom = Math.max(0.5, Number((state.zoom - 0.1).toFixed(2)));
+      applyZoom();
+    });
+    el("fullscreen").addEventListener("click", function () {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen();
+    });
+    el("toggle-index").addEventListener("click", function () {
+      var panel = el("index-panel");
+      panel.hidden = !panel.hidden;
+      buildBook();
+    });
+
+    document.addEventListener("keydown", function (event) {
+      if (event.target instanceof HTMLInputElement) return;
+      if (event.key === "ArrowRight") goTo(state.page + 1);
+      if (event.key === "ArrowLeft") goTo(state.page - 1);
+    });
+
+    el("book").addEventListener(
+      "click",
+      function (event) {
+        var target = event.target.closest ? event.target.closest("[data-fb-action]") : null;
+        if (!target) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (target.dataset.fbAction === "page") {
+          goTo(Number(target.dataset.fbPage));
+          return;
+        }
+        var href = target.getAttribute("href");
+        if (href) window.open(href, "_blank", "noopener,noreferrer");
+      },
+      true,
+    );
+
+    var timer = 0;
+    window.addEventListener("resize", function () {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(buildBook, 150);
+    });
+  }
+
+  function boot() {
+    try {
+      el("count").textContent = "/ " + state.pages.length;
+      el("page").value = "1";
+      buildBookmarks();
+      buildBook();
+      applyZoom();
+      wireControls();
+      el("status").hidden = true;
+    } catch (error) {
+      console.error(error);
+      el("status").textContent = "No se ha podido cargar el flipbook: " + error.message;
+    }
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
