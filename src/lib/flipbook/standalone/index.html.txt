@@ -38,19 +38,17 @@
         <h2>Abre el flipbook con el servidor local</h2>
         <p>
           El navegador bloquea la lectura de archivos locales cuando se abre
-          <code>index.html</code> con doble clic. Todo funciona sin internet, solo hace falta
-          un pequeño servidor local incluido en esta carpeta:
+          <code>index.html</code> con doble clic. Todo funciona sin internet: solo hay que
+          arrancar el servidor local incluido en esta carpeta.
         </p>
         <ul>
-          <li>
-            <b>Recomendado:</b> terminal en esta carpeta &rarr; <code>npm install</code> y
-            <code>npm run start</code>, luego abre <code>http://localhost:8080</code>
-          </li>
-          <li><b>Windows sin Node:</b> doble clic en <code>iniciar-windows.bat</code></li>
-          <li><b>macOS / Linux sin Node:</b> doble clic en <code>iniciar-mac-linux.command</code></li>
-          <li>O bien: <code>python3 -m http.server 8080</code></li>
+          <li><b>Windows:</b> doble clic en <code>iniciar-windows.bat</code></li>
+          <li><b>macOS / Linux:</b> doble clic en <code>iniciar-mac-linux.command</code></li>
         </ul>
-        <p>Consulta <code>README.txt</code> para los pasos detallados.</p>
+        <p>
+          Requiere Python 3 (gratis, <code>https://www.python.org/downloads/</code>). No hace
+          falta Node.js ni npm. Consulta <code>README.txt</code>.
+        </p>
       </div>
     </div>
 
