@@ -2,5 +2,10 @@
 cd /d "%~dp0"
 where py >nul 2>nul && (py servidor.py & goto :eof)
 where python >nul 2>nul && (python servidor.py & goto :eof)
-echo No se ha encontrado Python. Instalalo desde https://www.python.org/downloads/
+echo.
+echo  No se ha encontrado Python 3 en este equipo.
+echo  Instalalo gratis desde: https://www.python.org/downloads/
+echo  Durante la instalacion marca la opcion "Add Python to PATH".
+echo  Despues vuelve a hacer doble clic en este archivo.
+echo.
 pause

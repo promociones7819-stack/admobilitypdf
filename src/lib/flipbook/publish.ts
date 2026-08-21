@@ -25,8 +25,6 @@ import viewerJs from "./standalone/viewer.js.txt?raw";
 import stylesCss from "./standalone/styles.css.txt?raw";
 import readme from "./standalone/README.txt?raw";
 import leeme from "./standalone/LEEME.txt?raw";
-import packageJson from "./standalone/package.json.txt?raw";
-import serverMjs from "./standalone/server.mjs.txt?raw";
 import serverPy from "./standalone/servidor.py.txt?raw";
 import startWin from "./standalone/iniciar-windows.bat.txt?raw";
 import startUnix from "./standalone/iniciar-mac-linux.command.txt?raw";
@@ -68,9 +66,7 @@ export async function buildFlipbookZip(options: {
   folder.file("bookmarks.json", JSON.stringify(options.outline, null, 2));
   folder.file("README.txt", readme);
   folder.file("LEEME.txt", leeme);
-  folder.file("package.json", packageJson.replaceAll("__TITLE__", title));
-  folder.file("server.mjs", serverMjs);
-  folder.file("servidor.py", serverPy);
+  folder.file("servidor.py", serverPy, { unixPermissions: "755" });
   folder.file("iniciar-windows.bat", startWin);
   folder.file("iniciar-mac-linux.command", startUnix, { unixPermissions: "755" });
 

@@ -1,34 +1,28 @@
 FLIPBOOK AUTOCONTENIDO
 ======================
 
-Esta carpeta contiene todo lo necesario para ver el flipbook sin internet,
-sin servidores externos y sin subir el PDF a ningún sitio.
+Para Windows: doble clic en iniciar-windows.bat.
+Para macOS/Linux: doble clic en iniciar-mac-linux.command.
+
+El navegador se abre solo en http://localhost:8080 con el flipbook listo.
+Unico requisito: Python 3 (https://www.python.org/downloads/).
+Sin internet, sin Node.js, sin npm, sin instalar dependencias.
 
 Contenido
 ---------
   index.html         Punto de entrada del flipbook
   document.pdf       El PDF original (sin modificar)
   hotspots.json      Hotspots interactivos creados en el editor
-  bookmarks.json     Índice / marcadores del PDF
+  bookmarks.json     Indice / marcadores del PDF
   assets/            Visor (viewer.js) y estilos
   libs/              pdf.js y StPageFlip (copias locales)
-  iniciar-windows.bat / iniciar-mac-linux.command / servidor.py
+  servidor.py        Servidor local minimo (Python estandar)
 
-Cómo abrirlo
-------------
-Los navegadores bloquean la lectura de archivos locales al abrir index.html
-con doble clic (protocolo file://). Usa el servidor local incluido:
+Por que no basta con doble clic en index.html
+---------------------------------------------
+Con el protocolo file:// los navegadores bloquean la lectura de archivos
+locales (PDF, JSON y workers). Por eso se incluye el servidor local: sigue
+siendo 100% local y sin internet.
 
-  1) Abre una terminal en esta carpeta
-  2) npm install
-  3) npm run start
-  4) Abre http://localhost:8080
-
-Sin Node.js:
-
-  Windows        -> doble clic en iniciar-windows.bat
-  macOS / Linux  -> doble clic en iniciar-mac-linux.command
-  o bien:  python3 -m http.server 8080
-
-Esta carpeta se puede copiar a otro ordenador o a un USB y seguirá
+Esta carpeta se puede copiar a otro ordenador o a un USB y seguira
 funcionando exactamente igual.
