@@ -78,8 +78,8 @@ async function repairBytes(bytes: Uint8Array): Promise<Uint8Array> {
 }
 
 async function loadSource(file: File): Promise<PdfSource> {
-  if (file.size > MAX_BYTES) throw new Error("file-too-large");
   const looksPdf = /\.pdf$/i.test(file.name) || file.type === "application/pdf";
+
   let bytes = new Uint8Array(await file.arrayBuffer());
   if (bytes.byteLength === 0) throw new Error("empty-file");
   const header = new TextDecoder().decode(bytes.slice(0, 1024));
@@ -166,7 +166,10 @@ interface EditorContextValue {
   coverExport: CoverExportMode;
   setCoverExport: (mode: CoverExportMode) => void;
   addImageAsset: (asset: ImageAsset) => void;
-  openFiles: (files: File[]) => Promise<void>;
+  openFiles: (files: File[], opts?: { force?: boolean }) => Promise<void>;
+  /** PDFs que superan el tamaño recomendado y esperan decisión del usuario. */
+  largePrompt: { files: File[]; oversized: File[] } | null;
+  dismissLargePrompt: () => void;
   importFiles: (files: File[], insertAfterPageId?: string | null) => Promise<void>;
   addBlankPage: (insertAfterPageId?: string | null) => Promise<void>;
 
@@ -197,6 +200,10 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
   const [selection, setSelectionState] = useState<string[]>([]);
   const [activePageId, setActivePageId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [largePrompt, setLargePrompt] = useState<{
+    files: File[];
+    oversized: File[];
+  } | null>(null);
   const [tool, setToolState] = useState<ToolId>("select");
   const [style, setStyleState] = useState<AnnotationStyle>(DEFAULT_STYLE);
   const [selectedAnnotationId, setSelectedAnnotation] = useState<string | null>(null);
@@ -233,7 +240,16 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     }));
 
   const openFiles = useCallback(
-    async (files: File[]) => {
+    async (files: File[], opts?: { force?: boolean }) => {
+      // PDFs muy grandes: el usuario decide (optimizar / original / cancelar).
+      if (!opts?.force) {
+        const oversized = files.filter((f) => f.size > MAX_BYTES);
+        if (oversized.length) {
+          setLargePrompt({ files, oversized });
+          return;
+        }
+      }
+      setLargePrompt(null);
       setBusy(true);
       try {
         const loaded: PdfSource[] = [];
@@ -256,6 +272,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     },
     [resetHistory],
   );
+
 
   const importFiles = useCallback(
     async (files: File[], insertAfterPageId?: string | null) => {
@@ -599,6 +616,8 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       setCoverExport,
       addImageAsset,
       openFiles,
+      largePrompt,
+      dismissLargePrompt: () => setLargePrompt(null),
       importFiles,
       addBlankPage,
 
@@ -647,6 +666,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
 
       movePage,
       openFiles,
+      largePrompt,
       pages,
       redo,
       rotatePages,
