@@ -233,7 +233,16 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     }));
 
   const openFiles = useCallback(
-    async (files: File[]) => {
+    async (files: File[], opts?: { force?: boolean }) => {
+      // PDFs muy grandes: el usuario decide (optimizar / original / cancelar).
+      if (!opts?.force) {
+        const oversized = files.filter((f) => f.size > MAX_BYTES);
+        if (oversized.length) {
+          setLargePrompt({ files, oversized });
+          return;
+        }
+      }
+      setLargePrompt(null);
       setBusy(true);
       try {
         const loaded: PdfSource[] = [];
@@ -256,6 +265,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     },
     [resetHistory],
   );
+
 
   const importFiles = useCallback(
     async (files: File[], insertAfterPageId?: string | null) => {
