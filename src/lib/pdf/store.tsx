@@ -78,8 +78,8 @@ async function repairBytes(bytes: Uint8Array): Promise<Uint8Array> {
 }
 
 async function loadSource(file: File): Promise<PdfSource> {
-  if (file.size > MAX_BYTES) throw new Error("file-too-large");
   const looksPdf = /\.pdf$/i.test(file.name) || file.type === "application/pdf";
+
   let bytes = new Uint8Array(await file.arrayBuffer());
   if (bytes.byteLength === 0) throw new Error("empty-file");
   const header = new TextDecoder().decode(bytes.slice(0, 1024));
