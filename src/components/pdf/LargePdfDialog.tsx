@@ -203,7 +203,14 @@ export function LargePdfDialog() {
         <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
           {result ? (
             <>
-              <Button variant="ghost" onClick={() => setShowLevels(true) || setResult(null)}>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setResult(null);
+                  setShowLevels(true);
+                }}
+              >
+
                 Intentar otra compresión
               </Button>
               <Button variant="outline" onClick={() => void useOriginal()}>
