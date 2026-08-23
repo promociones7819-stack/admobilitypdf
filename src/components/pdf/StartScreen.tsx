@@ -22,8 +22,11 @@ export function StartScreen() {
   async function handle(files: FileList | File[] | null) {
     const list = Array.from(files ?? []);
     if (list.length === 0) return;
+    // Los PDFs muy grandes abren el diálogo de optimización, no el editor.
+    const oversized = list.some((f) => f.size > LARGE_PDF_BYTES);
     try {
       await openFiles(list);
+      if (oversized) return;
       toast.success(
         list.length > 1 ? `${list.length} PDFs combinados` : "Documento abierto",
       );
@@ -31,6 +34,7 @@ export function StartScreen() {
       toast.error(friendlyError(error));
     }
   }
+
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-canvas px-6 py-16">
