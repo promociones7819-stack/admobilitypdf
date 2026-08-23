@@ -12,6 +12,7 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { usePdfEditor, friendlyError } from "@/lib/pdf/store";
+import { LARGE_PDF_BYTES } from "@/lib/pdf/optimize";
 
 export function StartScreen() {
   const { openFiles, busy } = usePdfEditor();
