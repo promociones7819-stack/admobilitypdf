@@ -109,28 +109,37 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.24 0.012 250);
-  /* Neutral workspace backdrop behind the PDF page */
-  --canvas: oklch(0.965 0.003 250);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.24 0.012 250);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.24 0.012 250);
-  --primary: oklch(0.52 0.115 232);
-  --primary-foreground: oklch(0.99 0.002 250);
-  --secondary: oklch(0.965 0.004 250);
-  --secondary-foreground: oklch(0.3 0.012 250);
-  --muted: oklch(0.958 0.004 250);
-  --muted-foreground: oklch(0.53 0.014 250);
-  --accent: oklch(0.955 0.008 232);
-  --accent-foreground: oklch(0.3 0.02 232);
-  --destructive: oklch(0.577 0.21 22);
-  --destructive-foreground: oklch(0.99 0.002 250);
-  --border: oklch(0.916 0.005 250);
-  --input: oklch(0.916 0.005 250);
-  --ring: oklch(0.52 0.115 232);
+  --radius: 1rem;
+  --background: oklch(0.985 0.012 60);
+  --foreground: oklch(0.32 0.06 32);
+  /* Soft pastel workspace backdrop behind the PDF page */
+  --canvas: oklch(0.96 0.02 45);
+  --card: oklch(0.995 0.006 60);
+  --card-foreground: oklch(0.32 0.06 32);
+  --popover: oklch(0.995 0.006 60);
+  --popover-foreground: oklch(0.32 0.06 32);
+  --primary: oklch(0.68 0.16 30);
+  --primary-foreground: oklch(0.99 0.005 60);
+  --secondary: oklch(0.94 0.03 45);
+  --secondary-foreground: oklch(0.36 0.06 32);
+  --muted: oklch(0.95 0.02 50);
+  --muted-foreground: oklch(0.52 0.045 32);
+  --accent: oklch(0.9 0.05 310);
+  --accent-foreground: oklch(0.33 0.07 310);
+  --destructive: oklch(0.6 0.2 22);
+  --destructive-foreground: oklch(0.99 0.005 60);
+  --border: oklch(0.9 0.025 45);
+  --input: oklch(0.9 0.025 45);
+  --ring: oklch(0.68 0.16 30);
+  /* Playful pastel brand accents */
+  --coral: oklch(0.82 0.09 32);
+  --coral-foreground: oklch(0.34 0.09 32);
+  --lilac: oklch(0.83 0.08 300);
+  --lilac-foreground: oklch(0.34 0.09 300);
+  --amber: oklch(0.86 0.13 85);
+  --amber-foreground: oklch(0.34 0.08 60);
+  --mint: oklch(0.88 0.07 165);
+  --mint-foreground: oklch(0.34 0.07 165);
   --chart-1: oklch(0.52 0.115 232);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
