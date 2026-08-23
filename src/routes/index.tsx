@@ -31,10 +31,12 @@ function Workspace() {
   return (
     <>
       <OpenFromAi />
+      <LargePdfDialog />
       {hasDocument ? <Editor /> : <StartScreen />}
     </>
   );
 }
+
 
 function Index() {
   return (
