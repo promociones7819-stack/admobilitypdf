@@ -13,7 +13,11 @@ interface RequestMessage {
 }
 
 self.onmessage = async (event: MessageEvent<RequestMessage>) => {
-  const { bytes, level, target } = event.data;
+  const data = event.data;
+  // pdf.js también puede emitir mensajes en este worker: solo atendemos los nuestros.
+  if (!data || !(data.bytes instanceof ArrayBuffer) || !data.level) return;
+  const { bytes, level, target } = data;
+
   try {
     const result = await optimizePdf(new Uint8Array(bytes), {
       level,

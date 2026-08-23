@@ -3,6 +3,7 @@ import { PdfEditorProvider, usePdfEditor } from "@/lib/pdf/store";
 import { StartScreen } from "@/components/pdf/StartScreen";
 import { Editor } from "@/components/pdf/Editor";
 import { OpenFromAi } from "@/components/ai/OpenFromAi";
+import { LargePdfDialog } from "@/components/pdf/LargePdfDialog";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -31,10 +32,12 @@ function Workspace() {
   return (
     <>
       <OpenFromAi />
+      <LargePdfDialog />
       {hasDocument ? <Editor /> : <StartScreen />}
     </>
   );
 }
+
 
 function Index() {
   return (

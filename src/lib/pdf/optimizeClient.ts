@@ -37,7 +37,10 @@ function runInWorker(
             result: Omit<OptimizeResult, "bytes"> & { bytes: ArrayBuffer };
             validation: OptimizeRun["validation"];
           }
-        | { type: "error"; message: string };
+        | { type: "error"; message: string }
+        | undefined;
+      // pdf.js puede emitir mensajes propios en este mismo worker: se ignoran.
+      if (!data || typeof data !== "object") return;
       if (data.type === "progress") {
         onProgress?.(data.progress);
         return;
@@ -47,6 +50,7 @@ function runInWorker(
         reject(new Error(data.message));
         return;
       }
+      if (data.type !== "done" || !data.result) return;
       worker.terminate();
       resolve({
         result: { ...data.result, bytes: new Uint8Array(data.result.bytes) },
@@ -54,6 +58,7 @@ function runInWorker(
         ranInWorker: true,
       });
     };
+
     worker.onerror = (event) => {
       worker.terminate();
       reject(new Error(event.message || "worker-error"));
