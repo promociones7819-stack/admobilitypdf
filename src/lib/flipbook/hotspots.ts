@@ -19,7 +19,8 @@ export type HotspotButtonPreset =
   | "arrow-left"
   | "arrow-right"
   | "arrow-up"
-  | "arrow-down";
+  | "arrow-down"
+  | "ad-mobility";
 
 export interface Hotspot {
   id: string;
@@ -97,7 +98,15 @@ export function normalizeConfig(input: unknown): FlipbookConfig {
       height: Math.max(1, Number(h.height) || 1),
       ...(typeof h.label === "string" ? { label: h.label } : {}),
       ...((
-        ["circle", "square", "arrow-left", "arrow-right", "arrow-up", "arrow-down"] as const
+        [
+          "circle",
+          "square",
+          "arrow-left",
+          "arrow-right",
+          "arrow-up",
+          "arrow-down",
+          "ad-mobility",
+        ] as const
       ).includes(h.buttonPreset as HotspotButtonPreset)
         ? { buttonPreset: h.buttonPreset as HotspotButtonPreset }
         : {}),
@@ -117,6 +126,7 @@ export function normalizeConfig(input: unknown): FlipbookConfig {
 }
 
 export function buttonPresetGlyph(preset: HotspotButtonPreset): string {
+  if (preset === "ad-mobility") return "AD";
   if (preset === "arrow-left") return "←";
   if (preset === "arrow-right") return "→";
   if (preset === "arrow-up") return "↑";

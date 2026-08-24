@@ -131,7 +131,15 @@ function buildPageElement(page) {
     node.classList.add("hotspot-3d");
     if (preset.indexOf("arrow-") === 0) node.classList.add("hotspot-3d-arrow");
     if (preset === "circle") node.classList.add("hotspot-3d-circle");
-    node.textContent = glyphs[preset] || "●";
+    if (preset === "ad-mobility") {
+      node.classList.add("hotspot-3d-brand");
+      const image = document.createElement("img");
+      image.src = "assets/ad-mobility.png";
+      image.alt = "AD Mobility";
+      node.appendChild(image);
+    } else {
+      node.textContent = glyphs[preset] || "●";
+    }
     node.setAttribute("aria-label", hotspot.label || "Abrir hipervínculo");
   };
 

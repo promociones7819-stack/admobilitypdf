@@ -75,7 +75,16 @@ function buildPageElement(
     if (hotspot.buttonPreset) {
       el.className = `flipbook-3d-button${hotspot.buttonPreset.startsWith("arrow-") ? " flipbook-3d-arrow" : ""}`;
       el.style.borderRadius = hotspot.buttonPreset === "circle" ? "999px" : "14px";
-      el.textContent = buttonPresetGlyph(hotspot.buttonPreset);
+      if (hotspot.buttonPreset === "ad-mobility") {
+        el.classList.add("flipbook-3d-brand");
+        const logo = document.createElement("img");
+        logo.src = "/brand/ad-mobility.png";
+        logo.alt = "AD Mobility";
+        logo.style.cssText = "width:100%;height:100%;object-fit:contain;pointer-events:none;";
+        el.appendChild(logo);
+      } else {
+        el.textContent = buttonPresetGlyph(hotspot.buttonPreset);
+      }
       el.setAttribute("aria-label", hotspot.label || "Abrir hipervínculo");
     }
     if (target) {

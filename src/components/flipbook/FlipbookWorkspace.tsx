@@ -196,8 +196,9 @@ export function FlipbookWorkspace({
   const createPresetButton = (buttonPreset: HotspotButtonPreset) => {
     if (!currentPage) return;
     const arrow = buttonPreset.startsWith("arrow-");
-    const width = Math.min(arrow ? 82 : 58, currentPage.width * 0.18);
-    const height = Math.min(arrow ? 52 : 58, currentPage.height * 0.12);
+    const branded = buttonPreset === "ad-mobility";
+    const width = Math.min(branded ? 132 : arrow ? 82 : 58, currentPage.width * 0.24);
+    const height = Math.min(branded ? 112 : arrow ? 52 : 58, currentPage.height * 0.18);
     const hotspot: Hotspot = {
       id: makeHotspotId(),
       page,
@@ -206,7 +207,7 @@ export function FlipbookWorkspace({
       width,
       height,
       buttonPreset,
-      label: "Botón interactivo",
+      label: branded ? "AD Mobility" : "Botón interactivo",
       action: { type: "page", targetPage: config.menuPage },
     };
     setConfig((prev) => ({ ...prev, hotspots: [...prev.hotspots, hotspot] }));
@@ -404,6 +405,20 @@ export function FlipbookWorkspace({
                       </span>
                     </DropdownMenuItem>
                   ))}
+                  <DropdownMenuItem
+                    title="AD Mobility"
+                    aria-label="AD Mobility"
+                    onSelect={() => createPresetButton("ad-mobility")}
+                    className="col-span-3 flex h-24 cursor-pointer items-center justify-center p-2 focus:bg-transparent"
+                  >
+                    <span className="flipbook-3d-button flipbook-3d-brand flex h-20 w-28 items-center justify-center rounded-2xl">
+                      <img
+                        src="/brand/ad-mobility.png"
+                        alt="AD Mobility"
+                        className="size-full object-contain"
+                      />
+                    </span>
+                  </DropdownMenuItem>
                 </div>
                 <p className="px-3 pb-2 text-xs text-muted-foreground">
                   Después podrás moverlo, cambiar su tamaño y elegir el destino.

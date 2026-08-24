@@ -73,6 +73,7 @@ export async function buildFlipbookZip(options: {
   const assets = folder.folder("assets")!;
   assets.file("viewer.js", viewerJs);
   assets.file("styles.css", stylesCss);
+  assets.file("ad-mobility.png", await fetchLib("/brand/ad-mobility.png"));
 
   const libs = folder.folder("libs")!;
   const sources = await Promise.all(LIB_FILES.map((lib) => fetchLib(lib.url)));

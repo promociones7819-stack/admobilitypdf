@@ -187,6 +187,7 @@ export function HotspotEditor({
                     ? "flipbook-3d-button flex items-center justify-center border-0 text-white"
                     : "rounded-sm border-2 bg-primary/20",
                   hotspot.buttonPreset?.startsWith("arrow-") && "flipbook-3d-arrow",
+                  hotspot.buttonPreset === "ad-mobility" && "flipbook-3d-brand",
                   hotspot.buttonPreset === "circle" && "rounded-full",
                   hotspot.buttonPreset === "square" && "rounded-xl",
                   active
@@ -200,11 +201,17 @@ export function HotspotEditor({
                   height: pct(hotspot.height, page.height),
                 }}
               >
-                {hotspot.buttonPreset && (
+                {hotspot.buttonPreset === "ad-mobility" ? (
+                  <img
+                    src="/brand/ad-mobility.png"
+                    alt="AD Mobility"
+                    className="pointer-events-none size-full object-contain"
+                  />
+                ) : hotspot.buttonPreset ? (
                   <span className="pointer-events-none text-[clamp(16px,3vw,30px)] font-black leading-none drop-shadow-sm">
                     {buttonPresetGlyph(hotspot.buttonPreset)}
                   </span>
-                )}
+                ) : null}
                 <span className="pointer-events-none absolute -top-5 left-0 whitespace-nowrap rounded bg-primary px-1 text-[10px] font-medium text-primary-foreground">
                   {actionLabel(hotspot, menuPage)}
                 </span>
