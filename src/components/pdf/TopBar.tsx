@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
   Download,
@@ -47,9 +47,13 @@ function IconAction({
 export function TopBar({
   onToggleThumbs,
   onOpenFlipbook,
+  openCompression,
+  onCompressionOpened,
 }: {
   onToggleThumbs: () => void;
   onOpenFlipbook?: () => void;
+  openCompression: boolean;
+  onCompressionOpened: () => void;
 }) {
   const {
     fileName,
@@ -68,6 +72,12 @@ export function TopBar({
   const mergeRef = useRef<HTMLInputElement>(null);
   const addRef = useRef<HTMLInputElement>(null);
   const [compressOpen, setCompressOpen] = useState(false);
+
+  useEffect(() => {
+    if (!openCompression) return;
+    setCompressOpen(true);
+    onCompressionOpened();
+  }, [onCompressionOpened, openCompression]);
 
   return (
     <>

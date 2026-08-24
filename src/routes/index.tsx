@@ -36,6 +36,7 @@ function Workspace() {
   const { hasDocument, exportFile, busy } = usePdfEditor();
   const [stage, setStage] = useState<"edit" | "flipbook">("edit");
   const [flipbookFile, setFlipbookFile] = useState<File | null>(null);
+  const [openCompression, setOpenCompression] = useState(false);
 
   async function openFlipbook() {
     try {
@@ -72,9 +73,13 @@ function Workspace() {
       )}
       <div className="min-h-0 flex-1">
         {!hasDocument ? (
-          <StartScreen />
+          <StartScreen onRequestCompression={() => setOpenCompression(true)} />
         ) : stage === "edit" ? (
-          <Editor onOpenFlipbook={() => void openFlipbook()} />
+          <Editor
+            onOpenFlipbook={() => void openFlipbook()}
+            openCompression={openCompression}
+            onCompressionOpened={() => setOpenCompression(false)}
+          />
         ) : (
           <FlipbookWorkspace initialFile={flipbookFile} embedded />
         )}
