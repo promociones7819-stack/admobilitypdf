@@ -77,11 +77,19 @@ export function StartScreen() {
                 Arrastra un PDF aquí o elige una opción
               </p>
               <div className="mt-6 flex flex-wrap justify-center gap-3">
-                <Button size="lg" onClick={() => singleRef.current?.click()}>
+                <Button
+                  size="lg"
+                  className="rounded-full bg-amber-soft font-bold text-amber-soft-foreground hover:bg-amber-soft/85"
+                  onClick={() => singleRef.current?.click()}
+                >
                   <FilePlus2 className="mr-2 size-4" />
                   Abrir PDF
                 </Button>
-                <Button size="lg" variant="outline" onClick={() => multiRef.current?.click()}>
+                <Button
+                  size="lg"
+                  className="rounded-full bg-lilac font-bold text-lilac-foreground hover:bg-lilac/85"
+                  onClick={() => multiRef.current?.click()}
+                >
                   <Layers className="mr-2 size-4" />
                   Combinar PDFs
                 </Button>
