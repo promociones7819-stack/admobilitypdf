@@ -8,9 +8,12 @@ export type AnnotationKind =
   | "underline"
   | "strike"
   | "ink"
+  | "line"
+  | "arrow"
   | "rect"
   | "ellipse"
   | "image"
+  | "signature"
   /** Study strip ("Tira"): hides content until revealed. Never alters the PDF. */
   | "studyCover";
 
@@ -53,12 +56,13 @@ export interface Annotation {
   underline?: boolean;
   points?: Point[];
   imageId?: string;
+  /** Keeps image/signature proportions while resizing. */
+  lockAspect?: boolean;
   /** Font family name from the font catalogue (kind === "text"). */
   fontFamily?: string;
   align?: TextAlign;
   /** Study strip state: false hides the content underneath. */
   revealed?: boolean;
-
 }
 
 export interface ImageAsset {
@@ -117,7 +121,6 @@ export const STROKE_KINDS: AnnotationKind[] = ["ink", "highlight"];
 export const MIN_STROKE = 1;
 export const MAX_STROKE = 40;
 
-
 export const MARKER_KINDS: AnnotationKind[] = ["underline", "strike"];
 
 export const TOOL_LABELS: Record<ToolId, string> = {
@@ -127,9 +130,12 @@ export const TOOL_LABELS: Record<ToolId, string> = {
   underline: "Subrayar",
   strike: "Tachar",
   ink: "Dibujo a mano",
+  line: "Línea",
+  arrow: "Flecha",
   rect: "Rectángulo",
   ellipse: "Elipse",
-  image: "Imagen o firma",
+  image: "Imagen",
+  signature: "Firma",
   studyCover: "Tira",
 };
 
@@ -152,8 +158,7 @@ export function styleDefaultsFor(kind: AnnotationKind, style: AnnotationStyle) {
       filled: true,
       strokeWidth: style.highlightWidth,
     };
-  if (kind === "studyCover")
-    return { color: "#1f2937", opacity: 1, filled: true, strokeWidth: 0 };
+  if (kind === "studyCover") return { color: "#1f2937", opacity: 1, filled: true, strokeWidth: 0 };
   if (kind === "underline" || kind === "strike")
     return { color: style.color, opacity: 1, filled: false, strokeWidth: style.strokeWidth };
   return {

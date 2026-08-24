@@ -22,6 +22,7 @@ interface Props {
   /** Page size in PDF points, as displayed (rotation applied). */
   heightPt: number;
   onRequestImage: (placement: { x: number; y: number; width: number; height: number }) => void;
+  onRequestSignature: (placement: { x: number; y: number; width: number; height: number }) => void;
 }
 
 type Draft =
@@ -59,7 +60,15 @@ function strokePath(points: Point[]) {
   return points.map((p) => `${p.x},${p.y}`).join(" ");
 }
 
-export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequestImage }: Props) {
+export function AnnotationLayer({
+  pageId,
+  width,
+  height,
+  scale,
+  heightPt,
+  onRequestImage,
+  onRequestSignature,
+}: Props) {
   const {
     annotations,
     images,
@@ -103,10 +112,7 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
-      if (
-        target &&
-        (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)
-      )
+      if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable))
         return;
       if ((event.key === "Delete" || event.key === "Backspace") && selectedAnnotationId) {
         event.preventDefault();
@@ -150,7 +156,12 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
       const annotation = createAnnotation(
         "text",
         pageId,
-        { x: at.x, y: at.y, width: 0.35, height: (style.fontSize * 1.6) / heightPt },
+        {
+          x: Math.min(at.x, 0.65),
+          y: Math.min(at.y, 1 - (style.fontSize * 1.6) / heightPt),
+          width: 0.35,
+          height: (style.fontSize * 1.6) / heightPt,
+        },
         style,
         { text: "" },
       );
@@ -162,6 +173,11 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
     }
     if (tool === "image") {
       onRequestImage({ x: at.x, y: at.y, width: 0.3, height: 0.15 });
+      setTool("select");
+      return;
+    }
+    if (tool === "signature") {
+      onRequestSignature({ x: at.x, y: at.y, width: 0.34, height: 0.12 });
       setTool("select");
       return;
     }
@@ -182,14 +198,25 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
     const dy = at.y - draft.start.y;
     if (draft.mode === "move") {
       updateAnnotationPreview(draft.origin, {
-        x: clamp01(draft.origin.x + dx),
-        y: clamp01(draft.origin.y + dy),
+        x: Math.max(0, Math.min(1 - draft.origin.width, draft.origin.x + dx)),
+        y: Math.max(0, Math.min(1 - draft.origin.height, draft.origin.y + dy)),
       });
     } else {
-      updateAnnotationPreview(draft.origin, {
-        width: Math.max(MIN_SIZE, draft.origin.width + dx),
-        height: Math.max(MIN_SIZE, draft.origin.height + dy),
-      });
+      const ratio = draft.origin.height / draft.origin.width;
+      const maxWidth = draft.origin.lockAspect
+        ? Math.min(1 - draft.origin.x, (1 - draft.origin.y) / ratio)
+        : 1 - draft.origin.x;
+      const nextWidth = Math.max(MIN_SIZE, Math.min(maxWidth, draft.origin.width + dx));
+      const nextHeight = Math.max(MIN_SIZE, Math.min(1 - draft.origin.y, draft.origin.height + dy));
+      updateAnnotationPreview(
+        draft.origin,
+        draft.origin.lockAspect
+          ? {
+              width: nextWidth,
+              height: Math.max(MIN_SIZE, nextWidth * ratio),
+            }
+          : { width: nextWidth, height: nextHeight },
+      );
     }
   }
 
@@ -216,13 +243,19 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
         const h = Math.max(box.maxY - box.minY, MIN_SIZE);
         if (draft.points.length > 1) {
           addAnnotation(
-            createAnnotation(kind, pageId, { x: box.minX, y: box.minY, width: w, height: h }, style, {
-              points: draft.points.map((p) => ({
-                x: (p.x - box.minX) / w,
-                y: (p.y - box.minY) / h,
-                p: p.p ?? 1,
-              })),
-            }),
+            createAnnotation(
+              kind,
+              pageId,
+              { x: box.minX, y: box.minY, width: w, height: h },
+              style,
+              {
+                points: draft.points.map((p) => ({
+                  x: (p.x - box.minX) / w,
+                  y: (p.y - box.minY) / h,
+                  p: p.p ?? 1,
+                })),
+              },
+            ),
           );
         }
       } else {
@@ -230,8 +263,27 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
         const geometry = MARKER_KINDS.includes(kind)
           ? { ...box, height: Math.max(box.height, (style.fontSize * 1.1) / heightPt) }
           : box;
-        if (box.width > MIN_SIZE * 2 || box.height > MIN_SIZE * 2)
-          addAnnotation(createAnnotation(kind, pageId, geometry, style));
+        if (box.width > MIN_SIZE * 2 || box.height > MIN_SIZE * 2) {
+          const directional = kind === "line" || kind === "arrow";
+          addAnnotation(
+            createAnnotation(kind, pageId, geometry, style, {
+              ...(directional
+                ? {
+                    points: [
+                      {
+                        x: (draft.start.x - box.x) / box.width,
+                        y: (draft.start.y - box.y) / box.height,
+                      },
+                      {
+                        x: (draft.current.x - box.x) / box.width,
+                        y: (draft.current.y - box.y) / box.height,
+                      },
+                    ],
+                  }
+                : {}),
+            }),
+          );
+        }
       }
       // The strip and the pen stay active so several marks can be made in a row.
       if (kind !== "studyCover" && !STROKE_KINDS.includes(kind)) setTool("select");
@@ -335,7 +387,11 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
           );
         case "ink":
           return (
-            <svg className="size-full overflow-visible" viewBox="0 0 1 1" preserveAspectRatio="none">
+            <svg
+              className="size-full overflow-visible"
+              viewBox="0 0 1 1"
+              preserveAspectRatio="none"
+            >
               <polyline
                 points={strokePath(merged.points ?? [])}
                 fill="none"
@@ -347,13 +403,57 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
               />
             </svg>
           );
-        case "image": {
+        case "line":
+        case "arrow": {
+          const points =
+            merged.points?.length === 2
+              ? merged.points
+              : [
+                  { x: 0, y: 0 },
+                  { x: 1, y: 1 },
+                ];
+          const [start, end] = points;
+          return (
+            <svg
+              className="size-full overflow-visible"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+            >
+              <defs>
+                <marker
+                  id={`arrow-${merged.id}`}
+                  markerWidth="8"
+                  markerHeight="8"
+                  refX="7"
+                  refY="4"
+                  orient="auto"
+                  markerUnits="strokeWidth"
+                >
+                  <path d="M 0 0 L 8 4 L 0 8 z" fill={merged.color} />
+                </marker>
+              </defs>
+              <line
+                x1={(start?.x ?? 0) * 100}
+                y1={(start?.y ?? 0) * 100}
+                x2={(end?.x ?? 1) * 100}
+                y2={(end?.y ?? 1) * 100}
+                stroke={merged.color}
+                strokeWidth={Math.max(1, merged.strokeWidth) * scale}
+                vectorEffect="non-scaling-stroke"
+                strokeLinecap="round"
+                markerEnd={merged.kind === "arrow" ? `url(#arrow-${merged.id})` : undefined}
+              />
+            </svg>
+          );
+        }
+        case "image":
+        case "signature": {
           const asset = merged.imageId ? images[merged.imageId] : undefined;
           return asset ? (
             <img
               src={imageDataUrl(asset)}
-              alt="Anotación de imagen"
-              className="size-full object-fill"
+              alt={merged.kind === "signature" ? "Firma" : "Anotación de imagen"}
+              className="size-full object-contain"
               draggable={false}
             />
           ) : null;
@@ -459,7 +559,9 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
               <Trash2 className="size-3" />
             </button>
             {annotation.kind !== "ink" && (
-              <div
+              <button
+                type="button"
+                aria-label="Cambiar tamaño de la anotación"
                 className="absolute -bottom-1.5 -right-1.5 size-3 cursor-nwse-resize rounded-sm border border-primary bg-background"
                 onPointerDown={(event) => {
                   event.stopPropagation();
@@ -469,6 +571,41 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
                     origin: annotation,
                     start: toLocal(event),
                   });
+                }}
+                onKeyDown={(event) => {
+                  const step = event.shiftKey ? 0.02 : 0.005;
+                  const widthDelta =
+                    event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0;
+                  const heightDelta =
+                    event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0;
+                  if (!widthDelta && !heightDelta) return;
+                  event.preventDefault();
+                  const ratio = annotation.height / annotation.width;
+                  const maxWidth = annotation.lockAspect
+                    ? Math.min(1 - annotation.x, (1 - annotation.y) / ratio)
+                    : 1 - annotation.x;
+                  const nextWidth = Math.max(
+                    MIN_SIZE,
+                    Math.min(maxWidth, annotation.width + widthDelta + heightDelta),
+                  );
+                  updateAnnotation(
+                    annotation.id,
+                    annotation.lockAspect
+                      ? {
+                          width: nextWidth,
+                          height: nextWidth * ratio,
+                        }
+                      : {
+                          width: Math.max(
+                            MIN_SIZE,
+                            Math.min(1 - annotation.x, annotation.width + widthDelta),
+                          ),
+                          height: Math.max(
+                            MIN_SIZE,
+                            Math.min(1 - annotation.y, annotation.height + heightDelta),
+                          ),
+                        },
+                  );
                 }}
               />
             )}
@@ -480,7 +617,8 @@ export function AnnotationLayer({ pageId, width, height, scale, heightPt, onRequ
 
   const drafting = draft?.mode === "create" ? draft : null;
   const draftStroke = drafting && STROKE_KINDS.includes(drafting.kind) ? drafting : null;
-  const draftBox = drafting && !draftStroke ? normalizedBox(drafting.start, drafting.current) : null;
+  const draftBox =
+    drafting && !draftStroke ? normalizedBox(drafting.start, drafting.current) : null;
 
   return (
     <div

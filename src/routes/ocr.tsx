@@ -15,8 +15,7 @@ export const Route = createFileRoute("/ocr")({
       { property: "og:title", content: "OCR local de PDF" },
       {
         property: "og:description",
-        content:
-          "Extrae, edita y descarga el texto de tus PDFs escaneados con OCR 100 % local.",
+        content: "Extrae, edita y descarga el texto de tus PDFs escaneados con OCR 100 % local.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

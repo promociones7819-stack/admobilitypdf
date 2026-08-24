@@ -7,7 +7,7 @@ import {
   Trash2,
   FilePlus,
   FileStack,
-
+  SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -20,6 +20,7 @@ import {
 import { renderThumbnail } from "@/lib/pdf/render";
 import { usePdfEditor, friendlyError } from "@/lib/pdf/store";
 import type { PageEntry } from "@/lib/pdf/types";
+import { PageOperationsDialog } from "./PageOperationsDialog";
 
 function Thumbnail({ page, index }: { page: PageEntry; index: number }) {
   const { sources } = usePdfEditor();
@@ -92,7 +93,6 @@ function Thumbnail({ page, index }: { page: PageEntry; index: number }) {
   );
 }
 
-
 export function ThumbnailPanel() {
   const {
     pages,
@@ -107,10 +107,10 @@ export function ThumbnailPanel() {
     extractPages,
     importFiles,
     addBlankPage,
-
   } = usePdfEditor();
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [operationsOpen, setOperationsOpen] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
   const insertAfterRef = useRef<string | null>(null);
 
@@ -132,6 +132,15 @@ export function ThumbnailPanel() {
         <div className="flex items-center gap-1">
           <button
             className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            onClick={() => setOperationsOpen(true)}
+            title="Rangos, rotación y división"
+            aria-label="Rangos, rotación y división"
+          >
+            <SlidersHorizontal className="size-3.5" />{" "}
+            <span className="hidden xl:inline">Rangos</span>
+          </button>
+          <button
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             onClick={() => {
               void addBlankPage(null).catch((e) => toast.error(friendlyError(e)));
             }}
@@ -149,7 +158,6 @@ export function ThumbnailPanel() {
             <FilePlus className="size-3.5" /> Añadir
           </button>
         </div>
-
       </div>
 
       <div data-thumb-scroll className="flex-1 space-y-2 overflow-y-auto p-3">
@@ -158,9 +166,7 @@ export function ThumbnailPanel() {
           const isActive = page.id === activePageId;
           return (
             <div key={page.id}>
-              {dropIndex === index && dragId && (
-                <div className="mb-2 h-0.5 rounded bg-primary" />
-              )}
+              {dropIndex === index && dragId && <div className="mb-2 h-0.5 rounded bg-primary" />}
               <ContextMenu>
                 <ContextMenuTrigger asChild>
                   <div
@@ -230,11 +236,9 @@ export function ThumbnailPanel() {
                     <FileStack className="mr-2 size-4" /> Insertar página en blanco
                   </ContextMenuItem>
 
-
                   <ContextMenuItem
                     onClick={() => {
-                      insertAfterRef.current =
-                        index > 0 ? (pages[index - 1]?.id ?? null) : null;
+                      insertAfterRef.current = index > 0 ? (pages[index - 1]?.id ?? null) : null;
                       importRef.current?.click();
                     }}
                   >
@@ -253,7 +257,6 @@ export function ThumbnailPanel() {
                     className="text-destructive focus:text-destructive"
                     onClick={() => confirmDelete(targets(page.id))}
                   >
-
                     <Trash2 className="mr-2 size-4" /> Eliminar página
                   </ContextMenuItem>
                 </ContextMenuContent>
@@ -261,9 +264,7 @@ export function ThumbnailPanel() {
             </div>
           );
         })}
-        {dropIndex === pages.length && dragId && (
-          <div className="h-0.5 rounded bg-primary" />
-        )}
+        {dropIndex === pages.length && dragId && <div className="h-0.5 rounded bg-primary" />}
       </div>
 
       <input
@@ -281,6 +282,7 @@ export function ThumbnailPanel() {
             .catch((error) => toast.error(friendlyError(error)));
         }}
       />
+      <PageOperationsDialog open={operationsOpen} onOpenChange={setOperationsOpen} />
     </div>
   );
 }

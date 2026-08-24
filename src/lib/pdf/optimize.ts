@@ -203,10 +203,7 @@ export async function optimizePdf(
   if (best.byteLength > originalSize) best = bytes.slice(0);
   onProgress?.({ phase: "rebuild", done: 1, total: 1 });
 
-  const result = (
-    data: Uint8Array,
-    strategy: OptimizeResult["strategy"],
-  ): OptimizeResult => ({
+  const result = (data: Uint8Array, strategy: OptimizeResult["strategy"]): OptimizeResult => ({
     bytes: data,
     pageCount: analysis.pageCount,
     originalSize,
@@ -243,9 +240,7 @@ export async function optimizePdf(
   }
 
   const raster = await rasterize(bytes, PRESETS[level], onProgress);
-  return raster.byteLength < best.byteLength
-    ? result(raster, "raster")
-    : result(best, "lossless");
+  return raster.byteLength < best.byteLength ? result(raster, "raster") : result(best, "lossless");
 }
 
 /**
@@ -262,20 +257,25 @@ export async function validatePdf(
     const doc = await openDoc(bytes);
     try {
       if (doc.numPages !== expectedPages) return { ok: false, reason: "faltan-paginas" };
-      const page = await doc.getPage(1);
-      const viewport = page.getViewport({ scale: 0.2 });
-      const canvas = makeCanvas(
-        Math.max(1, Math.floor(viewport.width)),
-        Math.max(1, Math.floor(viewport.height)),
-      );
-      const ctx = canvas.getContext("2d") as CanvasRenderingContext2D | null;
-      if (!ctx) return { ok: false, reason: "sin-canvas" };
-      await page.render({
-        canvas: canvas as unknown as HTMLCanvasElement,
-        canvasContext: ctx,
-        viewport,
-      } as Parameters<typeof page.render>[0]).promise;
-      page.cleanup();
+      const samples = Array.from(new Set([1, Math.ceil(doc.numPages / 2), doc.numPages]));
+      for (const pageNumber of samples) {
+        const page = await doc.getPage(pageNumber);
+        const viewport = page.getViewport({ scale: 0.2 });
+        const canvas = makeCanvas(
+          Math.max(1, Math.floor(viewport.width)),
+          Math.max(1, Math.floor(viewport.height)),
+        );
+        const ctx = canvas.getContext("2d") as CanvasRenderingContext2D | null;
+        if (!ctx) return { ok: false, reason: "sin-canvas" };
+        await page.render({
+          canvas: canvas as unknown as HTMLCanvasElement,
+          canvasContext: ctx,
+          viewport,
+        } as Parameters<typeof page.render>[0]).promise;
+        page.cleanup();
+        canvas.width = 0;
+        canvas.height = 0;
+      }
       return { ok: true };
     } finally {
       await doc.destroy();

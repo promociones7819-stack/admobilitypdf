@@ -5,6 +5,7 @@ import {
   AlignRight,
   Check,
   ChevronDown,
+  Copy,
   Eraser,
   Eye,
   EyeOff,
@@ -23,13 +24,7 @@ import {
 } from "@/lib/pdf/annotations";
 import { FONT_CATALOG, fontCss } from "@/lib/pdf/fonts";
 
-function FontPicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (family: string) => void;
-}) {
+function FontPicker({ value, onChange }: { value: string; onChange: (family: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -81,6 +76,7 @@ export function AnnotationOptions() {
     selectedAnnotationId,
     setSelectedAnnotation,
     updateAnnotation,
+    duplicateAnnotation,
     activePageId,
     clearPageAnnotations,
     setCoversRevealed,
@@ -98,7 +94,16 @@ export function AnnotationOptions() {
   const kind = selected?.kind ?? tool;
   const showText = kind === "text";
   const isHighlight = kind === "highlight";
-  const showStroke = ["ink", "rect", "ellipse", "underline", "strike", "highlight"].includes(kind);
+  const showStroke = [
+    "ink",
+    "line",
+    "arrow",
+    "rect",
+    "ellipse",
+    "underline",
+    "strike",
+    "highlight",
+  ].includes(kind);
   const strokeValue = isHighlight
     ? (selected?.strokeWidth ?? style.highlightWidth)
     : (selected?.strokeWidth ?? style.strokeWidth);
@@ -399,6 +404,14 @@ export function AnnotationOptions() {
       )}
 
       <div className="ml-auto flex shrink-0 items-center gap-3">
+        {selected && (
+          <button
+            onClick={() => duplicateAnnotation(selected.id)}
+            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Copy className="size-3.5" /> Duplicar objeto
+          </button>
+        )}
         <span className="text-muted-foreground">{pageCount} anotaciones en la página</span>
         <button
           disabled={!activePageId || pageCount === 0}

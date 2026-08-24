@@ -16,13 +16,7 @@ import type {
   Source,
 } from "./types";
 
-export type IngestStep =
-  | "reading"
-  | "extracting"
-  | "chunking"
-  | "embedding"
-  | "indexing"
-  | "done";
+export type IngestStep = "reading" | "extracting" | "chunking" | "embedding" | "indexing" | "done";
 
 export interface IngestProgress {
   step: IngestStep;
@@ -137,15 +131,10 @@ export async function retrieve(
       : undefined;
   const sourceIds =
     scope && scope.kind !== "all" && scope.sourceId ? [scope.sourceId] : options.sourceIds;
-  const results = await indexedDbVectorStore.search(
-    notebookId,
-    queryVector,
-    options.topK ?? 6,
-    {
-      ...(sourceIds ? { sourceIds } : {}),
-      ...(pageNumbers ? { pageNumbers } : {}),
-    },
-  );
+  const results = await indexedDbVectorStore.search(notebookId, queryVector, options.topK ?? 6, {
+    ...(sourceIds ? { sourceIds } : {}),
+    ...(pageNumbers ? { pageNumbers } : {}),
+  });
   return results.filter((item) => item.score > 0.05);
 }
 
@@ -195,9 +184,7 @@ export async function askWithSources(params: {
     (delta) => params.onToken?.(delta),
     params.signal,
   );
-  const used = new Set(
-    Array.from(answer.matchAll(/\[(\d+)\]/g)).map((match) => Number(match[1])),
-  );
+  const used = new Set(Array.from(answer.matchAll(/\[(\d+)\]/g)).map((match) => Number(match[1])));
   const filtered = used.size
     ? citations.filter((citation) => used.has(citation.index))
     : citations.slice(0, 4);

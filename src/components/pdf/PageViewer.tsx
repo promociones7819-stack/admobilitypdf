@@ -5,6 +5,7 @@ import { usePdfEditor, friendlyError } from "@/lib/pdf/store";
 import { getPageSize, renderPageToCanvas } from "@/lib/pdf/render";
 import { createAnnotation, displaySize, readImageAsset } from "@/lib/pdf/annotations";
 import { AnnotationLayer } from "./AnnotationLayer";
+import { SignatureDialog } from "./SignatureDialog";
 import type { ZoomMode } from "./zoom";
 
 interface Props {
@@ -19,12 +20,17 @@ export function PageViewer({ zoom, onEffectiveScale }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const placementRef = useRef<{ x: number; y: number; width: number; height: number } | null>(
-    null,
-  );
+  const placementRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
   const tokenRef = useRef(0);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [rendering, setRendering] = useState(false);
+  const [signatureOpen, setSignatureOpen] = useState(false);
+  const [signaturePlacement, setSignaturePlacement] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const [layer, setLayer] = useState({ width: 0, height: 0, scale: 1, heightPt: 1 });
 
   useEffect(() => {
@@ -106,8 +112,15 @@ export function PageViewer({ zoom, onEffectiveScale }: Props) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page?.id, page?.rotation, page?.sourceIndex, source?.doc, zoom, containerSize.width, containerSize.height]);
-
+  }, [
+    page?.id,
+    page?.rotation,
+    page?.sourceIndex,
+    source?.doc,
+    zoom,
+    containerSize.width,
+    containerSize.height,
+  ]);
 
   return (
     <div
@@ -129,6 +142,10 @@ export function PageViewer({ zoom, onEffectiveScale }: Props) {
                 onRequestImage={(placement) => {
                   placementRef.current = placement;
                   imageInputRef.current?.click();
+                }}
+                onRequestSignature={(placement) => {
+                  setSignaturePlacement(placement);
+                  setSignatureOpen(true);
                 }}
               />
             )}
@@ -165,13 +182,43 @@ export function PageViewer({ zoom, onEffectiveScale }: Props) {
                 createAnnotation(
                   "image",
                   page.id,
-                  { x: placement.x, y: placement.y, width, height },
+                  {
+                    x: Math.min(placement.x, 1 - width),
+                    y: Math.min(placement.y, 1 - height),
+                    width,
+                    height,
+                  },
                   style,
-                  { imageId: asset.id, opacity: 1 },
+                  { imageId: asset.id, opacity: 1, lockAspect: true },
                 ),
               );
             })
             .catch((error) => toast.error(friendlyError(error)));
+        }}
+      />
+      <SignatureDialog
+        open={signatureOpen}
+        onOpenChange={setSignatureOpen}
+        onConfirm={(asset) => {
+          if (!page || !signaturePlacement) return;
+          addImageAsset(asset);
+          const ratio = asset.height / asset.width;
+          const width = signaturePlacement.width;
+          const height = (width * layer.width * ratio) / Math.max(1, layer.height);
+          addAnnotation(
+            createAnnotation(
+              "signature",
+              page.id,
+              {
+                x: Math.min(signaturePlacement.x, 1 - width),
+                y: Math.min(signaturePlacement.y, 1 - height),
+                width,
+                height,
+              },
+              style,
+              { imageId: asset.id, opacity: 1, lockAspect: true },
+            ),
+          );
         }}
       />
     </div>

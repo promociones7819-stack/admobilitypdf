@@ -19,7 +19,8 @@ interface EditorProps {
   zoom: number;
   onSelect: (id: string | null) => void;
   onCreate: (rect: Rect) => void;
-  onUpdate: (id: string, rect: Rect) => void;
+  onUpdate: (id: string, rect: Rect, record?: boolean) => void;
+  onEditStart: () => void;
 }
 
 type Drag =
@@ -37,6 +38,7 @@ export function HotspotEditor({
   onSelect,
   onCreate,
   onUpdate,
+  onEditStart,
 }: EditorProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -80,6 +82,7 @@ export function HotspotEditor({
     event.preventDefault();
     event.stopPropagation();
     onSelect(hotspot.id);
+    onEditStart();
     const p = toPoints(event.clientX, event.clientY);
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
     setDrag({
@@ -109,7 +112,7 @@ export function HotspotEditor({
       drag.kind === "move"
         ? { ...drag.base, x: drag.base.x + dx, y: drag.base.y + dy }
         : { ...drag.base, width: drag.base.width + dx, height: drag.base.height + dy };
-    onUpdate(drag.id, clampRect(next));
+    onUpdate(drag.id, clampRect(next), false);
   };
 
   const onPointerUp = () => {
@@ -126,7 +129,10 @@ export function HotspotEditor({
     <div className="flex flex-1 items-start justify-center overflow-auto p-4">
       <div
         className="relative bg-white shadow-xl"
-        style={{ width: `${Math.round(680 * zoom)}px`, aspectRatio: `${page.width} / ${page.height}` }}
+        style={{
+          width: `${Math.round(680 * zoom)}px`,
+          aspectRatio: `${page.width} / ${page.height}`,
+        }}
       >
         <img
           src={page.imageUrl}

@@ -4,15 +4,18 @@ import {
   Image as ImageIcon,
   MousePointer2,
   Pencil,
+  PenLine,
   RotateCcw,
   RotateCw,
   Scissors,
+  Signature,
   Square,
   Strikethrough,
   Trash2,
   Type,
   Underline,
   Circle,
+  MoveUpRight,
   SquareDashedBottom,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -58,9 +61,12 @@ const TOOLS: { id: ToolId; icon: React.ReactNode }[] = [
   { id: "underline", icon: <Underline className="size-4" /> },
   { id: "strike", icon: <Strikethrough className="size-4" /> },
   { id: "ink", icon: <Pencil className="size-4" /> },
+  { id: "line", icon: <PenLine className="size-4" /> },
+  { id: "arrow", icon: <MoveUpRight className="size-4" /> },
   { id: "rect", icon: <Square className="size-4" /> },
   { id: "ellipse", icon: <Circle className="size-4" /> },
   { id: "image", icon: <ImageIcon className="size-4" /> },
+  { id: "signature", icon: <Signature className="size-4" /> },
   { id: "studyCover", icon: <SquareDashedBottom className="size-4" /> },
 ];
 
@@ -116,8 +122,7 @@ export function AnnotationRail() {
         label="Eliminar página"
         onClick={() => {
           if (targets.length === 0) return;
-          if (targets.length > 1 && !window.confirm(`¿Eliminar ${targets.length} páginas?`))
-            return;
+          if (targets.length > 1 && !window.confirm(`¿Eliminar ${targets.length} páginas?`)) return;
           deletePages(targets);
         }}
       >

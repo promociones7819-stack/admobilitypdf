@@ -20,6 +20,8 @@ import {
   Circle,
   Square,
   Trash2,
+  Redo2,
+  Undo2,
   Upload,
   Wand2,
   ZoomIn,
@@ -44,13 +46,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,12 +55,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { buildFlipbookZip, buildSingleFlipbookHtml, publicationName } from "@/lib/flipbook/publish";
 import {
-  buildFlipbookZip,
-  buildSingleFlipbookHtml,
-  publicationName,
-} from "@/lib/flipbook/publish";
-import { loadFlipbookDocument, type FlipbookDocument } from "@/lib/flipbook/document";
+  disposeFlipbookDocument,
+  loadFlipbookDocument,
+  type FlipbookDocument,
+} from "@/lib/flipbook/document";
 import {
   documentKey,
   loadConfig,
@@ -80,10 +76,10 @@ import {
   type HotspotButtonPreset,
 } from "@/lib/flipbook/hotspots";
 import { saveBlob } from "@/lib/download";
+import { saveToActiveProject } from "@/lib/projects/storage";
 import { FlipbookStage, type FlipbookHandle } from "./FlipbookStage";
 import { AutoMenuDialog } from "./AutoMenuDialog";
 import { HotspotEditor } from "./HotspotEditor";
-
 
 type Mode = "view" | "edit";
 type DraftKind = "page" | "url" | "menu";
@@ -107,6 +103,9 @@ export function FlipbookWorkspace({
   const [storageKey, setStorageKey] = useState<string | null>(null);
   const [loading, setLoading] = useState<{ done: number; total: number } | null>(null);
   const [config, setConfig] = useState<FlipbookConfig>(EMPTY_CONFIG);
+  const configRef = useRef<FlipbookConfig>(EMPTY_CONFIG);
+  const pastRef = useRef<FlipbookConfig[]>([]);
+  const futureRef = useRef<FlipbookConfig[]>([]);
   const [mode, setMode] = useState<Mode>("view");
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState(1);
@@ -116,13 +115,17 @@ export function FlipbookWorkspace({
   const [srcFile, setSrcFile] = useState<File | null>(null);
   const [publishing, setPublishing] = useState(false);
 
-  const [dialog, setDialog] = useState<{ id: string; kind: DraftKind; targetPage: string; url: string } | null>(
-    null,
-  );
+  const [dialog, setDialog] = useState<{
+    id: string;
+    kind: DraftKind;
+    targetPage: string;
+    url: string;
+  } | null>(null);
   const openRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const flipRef = useRef<FlipbookHandle>(null);
   const initialFileRef = useRef<File | null>(null);
+  const documentRef = useRef<FlipbookDocument | null>(null);
 
   const pages = doc?.pages ?? [];
   const pageCount = pages.length;
@@ -133,10 +136,72 @@ export function FlipbookWorkspace({
     [config.hotspots, page],
   );
 
-  // Persistencia local automática (localStorage), por documento.
+  const setConfigWithHistory = (
+    update: FlipbookConfig | ((current: FlipbookConfig) => FlipbookConfig),
+    record = true,
+  ) => {
+    const current = configRef.current;
+    const next = typeof update === "function" ? update(current) : update;
+    if (record) {
+      pastRef.current = [...pastRef.current.slice(-79), current];
+      futureRef.current = [];
+    }
+    configRef.current = next;
+    setConfig(next);
+  };
+
+  const resetConfig = (next: FlipbookConfig) => {
+    pastRef.current = [];
+    futureRef.current = [];
+    configRef.current = next;
+    setConfig(next);
+  };
+
+  const checkpointConfig = () => {
+    pastRef.current = [...pastRef.current.slice(-79), configRef.current];
+    futureRef.current = [];
+  };
+
+  const undoConfig = () => {
+    const previous = pastRef.current.at(-1);
+    if (!previous) return;
+    pastRef.current = pastRef.current.slice(0, -1);
+    futureRef.current = [configRef.current, ...futureRef.current.slice(0, 79)];
+    configRef.current = previous;
+    setConfig(previous);
+    setSelectedId(null);
+  };
+
+  const redoConfig = () => {
+    const next = futureRef.current[0];
+    if (!next) return;
+    futureRef.current = futureRef.current.slice(1);
+    pastRef.current = [...pastRef.current.slice(-79), configRef.current];
+    configRef.current = next;
+    setConfig(next);
+    setSelectedId(null);
+  };
+
+  // Persistencia automática por documento: navegador y, si existe, carpeta del proyecto.
   useEffect(() => {
-    if (storageKey) saveConfig(storageKey, config);
-  }, [config, storageKey]);
+    if (!storageKey) return;
+    saveConfig(storageKey, config);
+    const timer = window.setTimeout(() => {
+      const name = `${(docName || "flipbook").replace(/\.pdf$/i, "")}.hotspots.json`;
+      void saveToActiveProject(
+        new Blob([JSON.stringify(config, null, 2)], { type: "application/json" }),
+        name,
+      );
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [config, docName, storageKey]);
+
+  useEffect(
+    () => () => {
+      disposeFlipbookDocument(documentRef.current);
+    },
+    [],
+  );
 
   const openFile = useCallback(async (file: File) => {
     if (file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) {
@@ -147,11 +212,13 @@ export function FlipbookWorkspace({
     try {
       const loaded = await loadFlipbookDocument(file, (done, total) => setLoading({ done, total }));
       const key = documentKey(file);
+      disposeFlipbookDocument(documentRef.current);
+      documentRef.current = loaded;
       setDoc(loaded);
       setSrcFile(file);
       setDocName(file.name);
       setStorageKey(key);
-      setConfig(loadConfig(key));
+      resetConfig(loadConfig(key));
       setPage(1);
       setMode("view");
       setSelectedId(null);
@@ -179,11 +246,14 @@ export function FlipbookWorkspace({
     [mode, pageCount],
   );
 
-  const updateHotspot = (id: string, patch: Partial<Hotspot>) =>
-    setConfig((prev) => ({
-      ...prev,
-      hotspots: prev.hotspots.map((h) => (h.id === id ? { ...h, ...patch } : h)),
-    }));
+  const updateHotspot = (id: string, patch: Partial<Hotspot>, record = true) =>
+    setConfigWithHistory(
+      (prev) => ({
+        ...prev,
+        hotspots: prev.hotspots.map((h) => (h.id === id ? { ...h, ...patch } : h)),
+      }),
+      record,
+    );
 
   const createHotspot = (geometry: Geometry) => {
     const hotspot: Hotspot = {
@@ -192,7 +262,7 @@ export function FlipbookWorkspace({
       ...geometry,
       action: { type: "page", targetPage: config.menuPage },
     };
-    setConfig((prev) => ({ ...prev, hotspots: [...prev.hotspots, hotspot] }));
+    setConfigWithHistory((prev) => ({ ...prev, hotspots: [...prev.hotspots, hotspot] }));
     setSelectedId(hotspot.id);
     setAdding(false);
     setDialog({ id: hotspot.id, kind: "page", targetPage: String(config.menuPage), url: "" });
@@ -215,7 +285,7 @@ export function FlipbookWorkspace({
       label: branded ? "AD Mobility" : "Botón interactivo",
       action: { type: "page", targetPage: config.menuPage },
     };
-    setConfig((prev) => ({ ...prev, hotspots: [...prev.hotspots, hotspot] }));
+    setConfigWithHistory((prev) => ({ ...prev, hotspots: [...prev.hotspots, hotspot] }));
     setSelectedId(hotspot.id);
     setAdding(false);
     setDialog({ id: hotspot.id, kind: "page", targetPage: String(config.menuPage), url: "" });
@@ -226,7 +296,9 @@ export function FlipbookWorkspace({
       id: hotspot.id,
       kind: hotspot.action.type,
       targetPage:
-        hotspot.action.type === "page" ? String(hotspot.action.targetPage) : String(config.menuPage),
+        hotspot.action.type === "page"
+          ? String(hotspot.action.targetPage)
+          : String(config.menuPage),
       url: hotspot.action.type === "url" ? hotspot.action.url : "",
     });
 
@@ -262,18 +334,24 @@ export function FlipbookWorkspace({
       x: Math.min(hotspot.x + 12, Math.max(0, (currentPage?.width ?? 0) - hotspot.width)),
       y: Math.min(hotspot.y + 12, Math.max(0, (currentPage?.height ?? 0) - hotspot.height)),
     };
-    setConfig((prev) => ({ ...prev, hotspots: [...prev.hotspots, copy] }));
+    setConfigWithHistory((prev) => ({ ...prev, hotspots: [...prev.hotspots, copy] }));
     setSelectedId(copy.id);
   };
 
   const removeHotspot = (id: string) => {
-    setConfig((prev) => ({ ...prev, hotspots: prev.hotspots.filter((h) => h.id !== id) }));
+    setConfigWithHistory((prev) => ({
+      ...prev,
+      hotspots: prev.hotspots.filter((h) => h.id !== id),
+    }));
     setSelectedId(null);
   };
 
   const exportConfig = async () => {
     const json = JSON.stringify(config, null, 2);
-    await saveBlob(new Blob([json], { type: "application/json" }), `${docName || "flipbook"}.hotspots.json`);
+    await saveBlob(
+      new Blob([json], { type: "application/json" }),
+      `${docName || "flipbook"}.hotspots.json`,
+    );
     toast.success("Configuración exportada");
   };
 
@@ -315,10 +393,13 @@ export function FlipbookWorkspace({
         config,
         outline: doc.outline,
       });
-      await saveBlob(
-        new Blob([html], { type: "text/html;charset=utf-8" }),
-        `${publicationName(docName)}-flipbook.html`,
-      );
+      const output = new Blob([html], { type: "text/html;charset=utf-8" });
+      await saveBlob(output, `${publicationName(docName)}-flipbook.html`);
+      if (output.size > 80 * 1024 * 1024) {
+        toast.warning(
+          "El HTML supera 80 MB. Para compartirlo suele ser mejor exportar el ZIP completo.",
+        );
+      }
       toast.success("Flipbook HTML listo: ábrelo con doble clic");
     } catch (error) {
       console.error("[flipbook] exportación HTML fallida", error);
@@ -328,11 +409,10 @@ export function FlipbookWorkspace({
     }
   };
 
-
   const importConfig = async (file: File) => {
     try {
       const parsed = normalizeConfig(JSON.parse(await file.text()));
-      setConfig(parsed);
+      resetConfig(parsed);
       setSelectedId(null);
       toast.success(`Importados ${parsed.hotspots.length} hotspots`);
     } catch (error) {
@@ -348,16 +428,16 @@ export function FlipbookWorkspace({
           <BookOpen className="size-7" />
         </span>
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">Flipbook con enlaces interactivos</h2>
+          <h2 className="text-lg font-semibold tracking-tight">
+            Flipbook con enlaces interactivos
+          </h2>
           <p className="mt-1 max-w-md text-sm text-muted-foreground">
-            Abre un PDF para verlo como libro y añadir hotspots que salten a otras páginas, a una URL
-            o al menú del documento. Todo el proceso ocurre en tu navegador.
+            Abre un PDF para verlo como libro y añadir hotspots que salten a otras páginas, a una
+            URL o al menú del documento. Todo el proceso ocurre en tu navegador.
           </p>
         </div>
         <Button onClick={() => openRef.current?.click()} disabled={!!loading}>
-          {loading
-            ? `Preparando páginas ${loading.done}/${loading.total || "…"}`
-            : "Abrir PDF"}
+          {loading ? `Preparando páginas ${loading.done}/${loading.total || "…"}` : "Abrir PDF"}
         </Button>
         <input
           ref={openRef}
@@ -402,6 +482,24 @@ export function FlipbookWorkspace({
         {mode === "edit" && (
           <>
             <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Deshacer cambio de hotspot"
+              disabled={pastRef.current.length === 0}
+              onClick={undoConfig}
+            >
+              <Undo2 className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Rehacer cambio de hotspot"
+              disabled={futureRef.current.length === 0}
+              onClick={redoConfig}
+            >
+              <Redo2 className="size-4" />
+            </Button>
+            <Button
               variant={adding ? "default" : "outline"}
               size="sm"
               onClick={() => setAdding((value) => !value)}
@@ -417,14 +515,16 @@ export function FlipbookWorkspace({
               <DropdownMenuContent className="w-72" align="start">
                 <DropdownMenuLabel>Insertar botón con hipervínculo</DropdownMenuLabel>
                 <div className="grid grid-cols-3 gap-2 p-2">
-                  {([
-                    ["circle", Circle, "Círculo"],
-                    ["square", Square, "Cuadrado"],
-                    ["arrow-left", ArrowLeft, "Flecha izquierda"],
-                    ["arrow-right", ArrowRight, "Flecha derecha"],
-                    ["arrow-up", ArrowUp, "Flecha arriba"],
-                    ["arrow-down", ArrowDown, "Flecha abajo"],
-                  ] as const).map(([preset, Icon, label]) => (
+                  {(
+                    [
+                      ["circle", Circle, "Círculo"],
+                      ["square", Square, "Cuadrado"],
+                      ["arrow-left", ArrowLeft, "Flecha izquierda"],
+                      ["arrow-right", ArrowRight, "Flecha derecha"],
+                      ["arrow-up", ArrowUp, "Flecha arriba"],
+                      ["arrow-down", ArrowDown, "Flecha abajo"],
+                    ] as const
+                  ).map(([preset, Icon, label]) => (
                     <DropdownMenuItem
                       key={preset}
                       title={label}
@@ -432,7 +532,9 @@ export function FlipbookWorkspace({
                       onSelect={() => createPresetButton(preset)}
                       className="flex h-16 cursor-pointer items-center justify-center p-1 focus:bg-transparent"
                     >
-                      <span className={`flipbook-3d-button flex h-11 w-14 items-center justify-center text-white ${preset === "circle" ? "w-11 rounded-full" : "rounded-xl"}`}>
+                      <span
+                        className={`flipbook-3d-button flex h-11 w-14 items-center justify-center text-white ${preset === "circle" ? "w-11 rounded-full" : "rounded-xl"}`}
+                      >
                         <Icon className="size-5" strokeWidth={3} />
                       </span>
                     </DropdownMenuItem>
@@ -460,12 +562,101 @@ export function FlipbookWorkspace({
             <Button variant="outline" size="sm" onClick={() => setAutoMenu(true)}>
               <Wand2 className="mr-2 size-4" /> Crear menú automáticamente
             </Button>
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="lg:hidden">
+                  Propiedades
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[min(90vw,22rem)] overflow-y-auto">
+                <SheetHeader>
+                  <SheetTitle>Propiedades del flipbook</SheetTitle>
+                </SheetHeader>
+                <div className="mt-5 space-y-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="mobile-menu-page">Página de inicio/menú</Label>
+                    <Input
+                      id="mobile-menu-page"
+                      type="number"
+                      min={1}
+                      max={pageCount}
+                      value={config.menuPage}
+                      onChange={(event) =>
+                        setConfigWithHistory((prev) => ({
+                          ...prev,
+                          menuPage: Math.min(
+                            Math.max(1, Number(event.target.value) || 1),
+                            pageCount,
+                          ),
+                        }))
+                      }
+                    />
+                  </div>
+                  {selected ? (
+                    <div className="space-y-3 border-t pt-4">
+                      <h3 className="font-medium">Hotspot seleccionado</h3>
+                      <Label htmlFor="mobile-label">Nombre accesible</Label>
+                      <Input
+                        id="mobile-label"
+                        value={selected.label ?? ""}
+                        placeholder="Ej. Ir al capítulo 2"
+                        onChange={(event) =>
+                          updateHotspot(selected.id, { label: event.target.value })
+                        }
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        {actionLabel(selected, config.menuPage)}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" onClick={() => openDialogFor(selected)}>
+                          Editar destino
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => duplicateHotspot(selected)}
+                        >
+                          <Copy className="mr-1.5 size-4" /> Duplicar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => removeHotspot(selected.id)}
+                        >
+                          <Trash2 className="mr-1.5 size-4" /> Eliminar
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="border-t pt-4 text-sm text-muted-foreground">
+                      Selecciona un hotspot en la página para editarlo.
+                    </p>
+                  )}
+                  <div className="space-y-1 border-t pt-4">
+                    <h3 className="font-medium">Hotspots de la página {page}</h3>
+                    {pageHotspots.map((hotspot) => (
+                      <button
+                        key={hotspot.id}
+                        onClick={() => setSelectedId(hotspot.id)}
+                        className="block w-full rounded-md px-2 py-2 text-left text-sm hover:bg-accent"
+                      >
+                        {hotspot.label || actionLabel(hotspot, config.menuPage)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
           </>
         )}
 
-
         <div className="mx-1 h-6 w-px bg-border" />
-        <Button variant="ghost" size="icon" aria-label="Página anterior" onClick={() => goToPage(page - 1)}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Página anterior"
+          onClick={() => goToPage(page - 1)}
+        >
           <ChevronLeft className="size-4" />
         </Button>
         <Input
@@ -478,7 +669,12 @@ export function FlipbookWorkspace({
           }}
         />
         <span className="text-xs text-muted-foreground">/ {pageCount}</span>
-        <Button variant="ghost" size="icon" aria-label="Página siguiente" onClick={() => goToPage(page + 1)}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Página siguiente"
+          onClick={() => goToPage(page + 1)}
+        >
           <ChevronRight className="size-4" />
         </Button>
         <Button variant="ghost" size="sm" onClick={() => goToPage(config.menuPage)}>
@@ -601,7 +797,8 @@ export function FlipbookWorkspace({
                 zoom={zoom}
                 onSelect={setSelectedId}
                 onCreate={createHotspot}
-                onUpdate={(id, rect) => updateHotspot(id, rect)}
+                onUpdate={(id, rect, record = true) => updateHotspot(id, rect, record)}
+                onEditStart={checkpointConfig}
               />
             )}
             <aside className="hidden w-72 shrink-0 space-y-4 overflow-y-auto border-l border-border bg-card p-4 lg:block">
@@ -617,7 +814,7 @@ export function FlipbookWorkspace({
                   max={pageCount}
                   value={config.menuPage}
                   onChange={(event) =>
-                    setConfig((prev) => ({
+                    setConfigWithHistory((prev) => ({
                       ...prev,
                       menuPage: Math.min(Math.max(1, Number(event.target.value) || 1), pageCount),
                     }))
@@ -635,6 +832,19 @@ export function FlipbookWorkspace({
                 )}
                 {selected && (
                   <div className="space-y-3">
+                    <div>
+                      <Label className="text-xs text-muted-foreground" htmlFor="hotspot-label">
+                        Nombre accesible
+                      </Label>
+                      <Input
+                        id="hotspot-label"
+                        value={selected.label ?? ""}
+                        placeholder="Ej. Ir al capítulo 2"
+                        onChange={(event) =>
+                          updateHotspot(selected.id, { label: event.target.value })
+                        }
+                      />
+                    </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">Destino</Label>
                       <p className="truncate text-sm">{actionLabel(selected, config.menuPage)}</p>
@@ -662,7 +872,11 @@ export function FlipbookWorkspace({
                       <Button size="sm" variant="outline" onClick={() => openDialogFor(selected)}>
                         Editar
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => duplicateHotspot(selected)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => duplicateHotspot(selected)}
+                      >
                         <Copy className="mr-2 size-4" /> Duplicar
                       </Button>
                       <Button
@@ -798,7 +1012,10 @@ export function FlipbookWorkspace({
         pageCount={pageCount}
         pageSize={currentPage ? { width: currentPage.width, height: currentPage.height } : null}
         onCreate={(created) => {
-          setConfig((prev) => ({ ...prev, hotspots: [...prev.hotspots, ...created] }));
+          setConfigWithHistory((prev) => ({
+            ...prev,
+            hotspots: [...prev.hotspots, ...created],
+          }));
           const first = created[0];
           if (first) {
             setSelectedId(first.id);
@@ -807,8 +1024,6 @@ export function FlipbookWorkspace({
           toast.success(`Menú creado con ${created.length} enlaces`);
         }}
       />
-
-
 
       <input
         ref={openRef}

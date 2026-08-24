@@ -2,7 +2,11 @@ FLIPBOOK - COMO ABRIRLO
 =======================
 
 Para Windows: doble clic en iniciar-windows.bat.
-Para macOS/Linux: doble clic en iniciar-mac-linux.command.
+Para macOS/Linux: clic derecho en iniciar-mac-linux.command > Abrir.
+
+Si macOS indica que faltan privilegios, abre Terminal, escribe "chmod +x "
+(con el espacio final), arrastra iniciar-mac-linux.command a Terminal y pulsa
+Intro. Después vuelve a usar clic derecho > Abrir.
 
 Se abrira el navegador con el flipbook funcionando.
 

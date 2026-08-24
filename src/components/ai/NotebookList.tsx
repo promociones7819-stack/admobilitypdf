@@ -27,7 +27,12 @@ export function NotebookList() {
           placeholder="Nuevo cuaderno"
           className="h-9"
         />
-        <Button size="icon" variant="secondary" onClick={() => void create()} aria-label="Crear cuaderno">
+        <Button
+          size="icon"
+          variant="secondary"
+          onClick={() => void create()}
+          aria-label="Crear cuaderno"
+        >
           <Plus className="size-4" />
         </Button>
       </div>
@@ -55,8 +60,16 @@ export function NotebookList() {
                 <button
                   type="button"
                   aria-label={`Eliminar ${notebook.name}`}
-                  onClick={() => void removeNotebook(notebook.id)}
-                  className="opacity-0 transition-opacity group-hover:opacity-100"
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        `¿Eliminar el cuaderno «${notebook.name}» y todas sus fuentes?`,
+                      )
+                    )
+                      return;
+                    void removeNotebook(notebook.id);
+                  }}
+                  className="rounded p-1 opacity-70 transition-opacity hover:opacity-100 focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
                 >
                   <Trash2 className="size-3.5 text-muted-foreground hover:text-destructive" />
                 </button>

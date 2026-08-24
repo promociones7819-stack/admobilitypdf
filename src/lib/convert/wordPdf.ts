@@ -22,12 +22,14 @@ const HEADING_SIZE: Record<string, number> = {
 
 /** Sustituye lo que Helvetica (WinAnsi) no puede codificar. */
 function sanitize(value: string): string {
-  return value
+  const punctuation = value
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201C\u201D]/g, '"')
     .replace(/[\u2013\u2014]/g, "-")
-    .replace(/\u2026/g, "...")
-    .replace(/[^\u0000-\u00ff]/g, "?");
+    .replace(/\u2026/g, "...");
+  return Array.from(punctuation, (character) =>
+    (character.codePointAt(0) ?? 0) <= 0xff ? character : "?",
+  ).join("");
 }
 
 function htmlToBlocks(html: string): Block[] {
@@ -59,7 +61,14 @@ function htmlToBlocks(html: string): Block[] {
   if (blocks.length === 0) {
     const fallback = (doc.body.textContent ?? "").trim();
     if (fallback) {
-      blocks.push({ text: fallback, size: 11, bold: false, italic: false, bullet: false, spaceAfter: 6 });
+      blocks.push({
+        text: fallback,
+        size: 11,
+        bold: false,
+        italic: false,
+        bullet: false,
+        spaceAfter: 6,
+      });
     }
   }
   return blocks;
@@ -68,7 +77,11 @@ function htmlToBlocks(html: string): Block[] {
 /** Convierte un .docx en bytes de PDF (A4, márgenes de 56 pt). */
 export async function docxToPdf(file: File): Promise<Uint8Array> {
   const [{ default: mammoth }, { PDFDocument, StandardFonts, rgb }] = await Promise.all([
-    import("mammoth/mammoth.browser.js") as Promise<{ default: { convertToHtml: (input: { arrayBuffer: ArrayBuffer }) => Promise<{ value: string }> } }>,
+    import("mammoth/mammoth.browser.js") as Promise<{
+      default: {
+        convertToHtml: (input: { arrayBuffer: ArrayBuffer }) => Promise<{ value: string }>;
+      };
+    }>,
     import("pdf-lib"),
   ]);
 
@@ -149,10 +162,7 @@ export async function docxToPdf(file: File): Promise<Uint8Array> {
 }
 
 /** Extrae el texto de un PDF y genera un .docx editable (un salto por página). */
-export async function pdfToDocx(
-  file: File,
-  onProgress?: (ratio: number) => void,
-): Promise<Blob> {
+export async function pdfToDocx(file: File, onProgress?: (ratio: number) => void): Promise<Blob> {
   const [pdfjs, docxLib] = await Promise.all([getPdfjs(), import("docx")]);
   const { Document, Packer, Paragraph, TextRun, HeadingLevel, PageBreak, AlignmentType } = docxLib;
 
@@ -187,7 +197,11 @@ export async function pdfToDocx(
       .filter(Boolean);
 
     if (paragraphs.length === 0) {
-      children.push(new Paragraph({ children: [new TextRun({ text: "(sin texto extraíble)", italics: true })] }));
+      children.push(
+        new Paragraph({
+          children: [new TextRun({ text: "(sin texto extraíble)", italics: true })],
+        }),
+      );
     }
     for (const paragraph of paragraphs) {
       children.push(new Paragraph({ children: [new TextRun(paragraph)], spacing: { after: 120 } }));

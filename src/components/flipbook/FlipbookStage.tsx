@@ -25,11 +25,7 @@ type PageFlipInstance = {
   getCurrentPageIndex: () => number;
 };
 
-function buildPageElement(
-  page: FlipbookPage,
-  hotspots: Hotspot[],
-  menuPage: number,
-): HTMLElement {
+function buildPageElement(page: FlipbookPage, hotspots: Hotspot[], menuPage: number): HTMLElement {
   const wrapper = document.createElement("div");
   wrapper.className = "page-container relative overflow-hidden bg-white";
   wrapper.dataset["pageNumber"] = String(page.number);
@@ -108,9 +104,12 @@ function buildPageElement(
   edge.type = "button";
   edge.dataset["fbAction"] = "turn";
   edge.dataset["fbDelta"] = isLeftPage ? "-1" : "1";
-  edge.setAttribute("aria-label", isLeftPage ? "Pasar a la página anterior" : "Pasar a la página siguiente");
+  edge.setAttribute(
+    "aria-label",
+    isLeftPage ? "Pasar a la página anterior" : "Pasar a la página siguiente",
+  );
   edge.title = "Arrastra o pulsa para pasar la hoja";
-  edge.style.cssText = `position:absolute;z-index:20;top:50%;${isLeftPage ? "left:0" : "right:0"};width:28px;height:88px;transform:translateY(-50%);border:0;cursor:grab;background:linear-gradient(${isLeftPage ? "90deg" : "270deg"},rgba(15,23,42,.22),transparent);opacity:.55;transition:opacity .2s;`;
+  edge.style.cssText = `position:absolute;z-index:20;top:50%;${isLeftPage ? "left:0" : "right:0"};width:36px;height:100px;transform:translateY(-50%);border:0;cursor:grab;touch-action:none;background:linear-gradient(${isLeftPage ? "90deg" : "270deg"},rgba(15,23,42,.22),transparent);opacity:.55;transition:opacity .2s;`;
   edge.addEventListener("mouseenter", () => (edge.style.opacity = "1"));
   edge.addEventListener("mouseleave", () => (edge.style.opacity = ".55"));
   wrapper.appendChild(edge);
@@ -145,6 +144,7 @@ export function FlipbookStage({
     let cancelled = false;
     let instance: PageFlipInstance | null = null;
     let observer: ResizeObserver | null = null;
+    let resizeTimer = 0;
 
     const setup = async () => {
       const { PageFlip } = await import("page-flip");
@@ -186,16 +186,22 @@ export function FlipbookStage({
         hostRef.current.appendChild(mount);
 
         for (const page of pages) {
-          const el = buildPageElement(page, hotspots.filter((h) => h.page === page.number), menuPage);
+          const el = buildPageElement(
+            page,
+            hotspots.filter((h) => h.page === page.number),
+            menuPage,
+          );
           el.style.width = `${Math.round(single ? width : width / 2)}px`;
           el.style.height = `${Math.round(height)}px`;
           mount.appendChild(el);
         }
 
-        instance = new (PageFlip as unknown as new (
-          el: HTMLElement,
-          cfg: Record<string, unknown>,
-        ) => PageFlipInstance)(mount, {
+        instance = new (
+          PageFlip as unknown as new (
+            el: HTMLElement,
+            cfg: Record<string, unknown>,
+          ) => PageFlipInstance
+        )(mount, {
           width: Math.round(single ? width : width / 2),
           height: Math.round(height),
           size: "fixed",
@@ -222,15 +228,18 @@ export function FlipbookStage({
         });
       };
 
-
       build();
-      observer = new ResizeObserver(() => build());
+      observer = new ResizeObserver(() => {
+        window.clearTimeout(resizeTimer);
+        resizeTimer = window.setTimeout(build, 120);
+      });
       if (host.parentElement) observer.observe(host.parentElement);
     };
 
     void setup();
     return () => {
       cancelled = true;
+      window.clearTimeout(resizeTimer);
       observer?.disconnect();
       try {
         instance?.destroy();
@@ -246,11 +255,47 @@ export function FlipbookStage({
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
+    let drag: { x: number; target: HTMLElement } | null = null;
+    let suppressClick = false;
+    const turn = (target: HTMLElement) => {
+      const delta = Number(target.dataset["fbDelta"] ?? 0);
+      const next = Math.min(Math.max(pageRef.current + delta, 1), pages.length);
+      if (next !== pageRef.current && flipRef.current) {
+        flipRef.current.flip(next - 1);
+        pageRef.current = next;
+        onPageChange(next);
+      }
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = (event.target as HTMLElement | null)?.closest<HTMLElement>(
+        '[data-fb-action="turn"]',
+      );
+      if (!target) return;
+      event.preventDefault();
+      drag = { x: event.clientX, target };
+      target.setPointerCapture?.(event.pointerId);
+      target.style.cursor = "grabbing";
+    };
+    const onPointerUp = (event: PointerEvent) => {
+      if (!drag) return;
+      const moved = Math.abs(event.clientX - drag.x);
+      drag.target.style.cursor = "grab";
+      if (moved >= 14) {
+        event.preventDefault();
+        suppressClick = true;
+        turn(drag.target);
+      }
+      drag = null;
+    };
     const onClick = (event: MouseEvent) => {
       const target = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-fb-action]");
       if (!target) return;
       event.preventDefault();
       event.stopPropagation();
+      if (suppressClick) {
+        suppressClick = false;
+        return;
+      }
       if (target.dataset["fbAction"] === "page") {
         const page = Number(target.dataset["fbPage"]);
         if (page && flipRef.current) {
@@ -261,20 +306,22 @@ export function FlipbookStage({
         return;
       }
       if (target.dataset["fbAction"] === "turn") {
-        const delta = Number(target.dataset["fbDelta"] ?? 0);
-        const next = Math.min(Math.max(pageRef.current + delta, 1), pages.length);
-        if (next !== pageRef.current && flipRef.current) {
-          flipRef.current.flip(next - 1);
-          pageRef.current = next;
-          onPageChange(next);
-        }
+        turn(target);
         return;
       }
       const href = target.getAttribute("href");
       if (href) window.open(href, "_blank", "noopener,noreferrer");
     };
+    host.addEventListener("pointerdown", onPointerDown, true);
+    host.addEventListener("pointerup", onPointerUp, true);
+    host.addEventListener("pointercancel", onPointerUp, true);
     host.addEventListener("click", onClick, true);
-    return () => host.removeEventListener("click", onClick, true);
+    return () => {
+      host.removeEventListener("pointerdown", onPointerDown, true);
+      host.removeEventListener("pointerup", onPointerUp, true);
+      host.removeEventListener("pointercancel", onPointerUp, true);
+      host.removeEventListener("click", onClick, true);
+    };
   }, [onPageChange, pages.length]);
 
   return (

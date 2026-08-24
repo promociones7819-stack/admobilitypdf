@@ -1,4 +1,13 @@
-import { ChevronLeft, ChevronRight, Maximize, Minus, Plus, RotateCcw, RotateCw, ShieldCheck } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Maximize,
+  Minus,
+  Plus,
+  RotateCcw,
+  RotateCw,
+  ShieldCheck,
+} from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +36,7 @@ export function StatusBar({ zoom, effectiveScale, setZoom }: Props) {
   return (
     <footer className="flex h-12 shrink-0 flex-wrap items-center gap-1 border-t border-border bg-card px-2 sm:px-4">
       <Button variant="ghost" size="icon" onClick={() => go(current - 1)} disabled={current <= 0}>
+        <span className="sr-only">Página anterior</span>
         <ChevronLeft className="size-4" />
       </Button>
       <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -55,12 +65,14 @@ export function StatusBar({ zoom, effectiveScale, setZoom }: Props) {
         onClick={() => go(current + 1)}
         disabled={current >= pages.length - 1}
       >
+        <span className="sr-only">Página siguiente</span>
         <ChevronRight className="size-4" />
       </Button>
 
       <div className="mx-2 h-6 w-px bg-border" />
 
       <Button variant="ghost" size="icon" onClick={() => setZoom(zoomOut(effectiveScale))}>
+        <span className="sr-only">Reducir zoom</span>
         <Minus className="size-4" />
       </Button>
       <button
@@ -71,6 +83,7 @@ export function StatusBar({ zoom, effectiveScale, setZoom }: Props) {
         {Math.round(effectiveScale * 100)}%
       </button>
       <Button variant="ghost" size="icon" onClick={() => setZoom(zoomIn(effectiveScale))}>
+        <span className="sr-only">Aumentar zoom</span>
         <Plus className="size-4" />
       </Button>
       <Button
@@ -93,15 +106,22 @@ export function StatusBar({ zoom, effectiveScale, setZoom }: Props) {
 
       <div className="mx-2 h-6 w-px bg-border" />
       <Button variant="ghost" size="icon" onClick={() => rotatePages(rotateTargets, -90)}>
+        <span className="sr-only">Rotar páginas a la izquierda</span>
         <RotateCcw className="size-4" />
       </Button>
       <Button variant="ghost" size="icon" onClick={() => rotatePages(rotateTargets, 90)}>
+        <span className="sr-only">Rotar páginas a la derecha</span>
         <RotateCw className="size-4" />
       </Button>
 
       <span className="ml-auto hidden items-center gap-1.5 text-[11px] text-muted-foreground lg:flex">
         <ShieldCheck className="size-3.5" />
-        Tu documento se procesa localmente en tu navegador. Zoom actual: {zoom === "fit-page" ? "ajustado" : zoom === "fit-width" ? "ancho" : `${Math.round(effectiveScale * 100)}%`}
+        Tu documento se procesa localmente en tu navegador. Zoom actual:{" "}
+        {zoom === "fit-page"
+          ? "ajustado"
+          : zoom === "fit-width"
+            ? "ancho"
+            : `${Math.round(effectiveScale * 100)}%`}
       </span>
     </footer>
   );

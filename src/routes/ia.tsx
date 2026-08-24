@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { FileText, Settings2, Sparkles } from "lucide-react";
+import { BookOpen, FileText, LibraryBig, Settings2, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -39,24 +39,65 @@ function AiRoute() {
   );
 }
 
-function AiWorkspace() {
+export function AiWorkspace({
+  embedded = false,
+  onBack,
+}: {
+  embedded?: boolean;
+  onBack?: () => void;
+}) {
   const [engineOpen, setEngineOpen] = useState(false);
+  const [notebooksOpen, setNotebooksOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div className={`flex flex-col bg-background ${embedded ? "h-full" : "h-screen"}`}>
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
         <Sparkles className="size-5 text-primary" />
         <h1 className="text-sm font-semibold tracking-tight">IA Documentos</h1>
         <span className="hidden rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground sm:inline">
-          100 % local
+          Procesamiento local
         </span>
         <div className="ml-auto flex items-center gap-2">
-          <Button asChild size="sm" variant="ghost">
-            <Link to="/">
+          {onBack ? (
+            <Button size="sm" variant="ghost" onClick={onBack}>
               <FileText className="mr-1 size-4" />
               Editor PDF
-            </Link>
-          </Button>
+            </Button>
+          ) : (
+            <Button asChild size="sm" variant="ghost">
+              <Link to="/">
+                <FileText className="mr-1 size-4" />
+                Editor PDF
+              </Link>
+            </Button>
+          )}
+          <Sheet open={notebooksOpen} onOpenChange={setNotebooksOpen}>
+            <SheetTrigger asChild>
+              <Button size="icon" variant="ghost" className="lg:hidden" aria-label="Cuadernos">
+                <BookOpen className="size-4" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="flex w-[20rem] flex-col p-4">
+              <SheetTitle className="mb-4 text-sm">Cuadernos</SheetTitle>
+              <div className="min-h-0 flex-1">
+                <NotebookList />
+              </div>
+            </SheetContent>
+          </Sheet>
+          <Sheet open={sourcesOpen} onOpenChange={setSourcesOpen}>
+            <SheetTrigger asChild>
+              <Button size="icon" variant="ghost" className="xl:hidden" aria-label="Fuentes">
+                <LibraryBig className="size-4" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="flex w-[22rem] flex-col p-4">
+              <SheetTitle className="mb-4 text-sm">Fuentes</SheetTitle>
+              <div className="min-h-0 flex-1">
+                <SourcesPanel />
+              </div>
+            </SheetContent>
+          </Sheet>
           <Sheet open={engineOpen} onOpenChange={setEngineOpen}>
             <SheetTrigger asChild>
               <Button size="sm" variant="secondary">
@@ -90,7 +131,7 @@ function AiWorkspace() {
             <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Fuentes
             </h2>
-            <div className="h-[calc(100%-1.75rem)]">
+            <div className="h-[calc(100%_-_1.75rem)]">
               <SourcesPanel />
             </div>
           </aside>

@@ -2,7 +2,14 @@ FLIPBOOK AUTOCONTENIDO
 ======================
 
 Para Windows: doble clic en iniciar-windows.bat.
-Para macOS/Linux: doble clic en iniciar-mac-linux.command.
+Para macOS/Linux: clic derecho en iniciar-mac-linux.command > Abrir.
+
+Si macOS dice que faltan privilegios, abre Terminal, escribe "chmod +x "
+(con el espacio final), arrastra iniciar-mac-linux.command a la ventana y
+pulsa Intro. Después usa clic derecho > Abrir.
+
+Si solo quieres hacer doble clic sin servidor, vuelve a PDF Maestro y elige
+Exportar > HTML único para Mac (.html).
 
 El navegador se abre solo en http://localhost:8080 con el flipbook listo.
 Unico requisito: Python 3 (https://www.python.org/downloads/).

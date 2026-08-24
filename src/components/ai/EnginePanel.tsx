@@ -13,7 +13,7 @@ export function EnginePanel() {
     llmLabel,
     embedderLabel,
     activateLocalModel,
-    useExtractive,
+    useExtractive: activateExtractive,
     enableNeuralEmbeddings,
   } = useAi();
   const [busy, setBusy] = useState<string | null>(null);
@@ -65,7 +65,7 @@ export function EnginePanel() {
         <button
           type="button"
           onClick={() => {
-            useExtractive();
+            activateExtractive();
             toast.success("Motor extractivo activo");
           }}
           className="flex w-full items-start gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-muted"

@@ -1,5 +1,4 @@
 import { useRef, useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
 import {
   BookOpen,
   BrainCircuit,
@@ -12,6 +11,7 @@ import {
   Image,
   Layers,
   Loader2,
+  History,
   ScanText,
   Send,
   ShieldCheck,
@@ -62,9 +62,7 @@ function ToolCard({
   return (
     <article
       className={`card-soft flex min-h-72 flex-col items-center rounded-[32px] px-7 py-8 text-center sm:min-h-80 sm:px-9 sm:py-10 ${
-        tone === "coral"
-          ? "bg-coral text-coral-foreground"
-          : "bg-lilac text-lilac-foreground"
+        tone === "coral" ? "bg-coral text-coral-foreground" : "bg-lilac text-lilac-foreground"
       }`}
     >
       <span className="inline-flex size-16 items-center justify-center rounded-2xl bg-card/80 shadow-sm [&>svg]:size-7">
@@ -80,8 +78,22 @@ function ToolCard({
 const toolButtonClass =
   "rounded-full border-0 bg-card px-6 font-bold text-card-foreground shadow-sm hover:bg-card/85";
 
-export function StartScreen({ onRequestCompression }: { onRequestCompression: () => void }) {
-  const { openFiles, busy } = usePdfEditor();
+export function StartScreen({
+  onRequestCompression,
+  onOpenTool,
+}: {
+  onRequestCompression: () => void;
+  onOpenTool: (tool: "convert" | "flipbook" | "ocr" | "ai") => void;
+}) {
+  const {
+    openFiles,
+    busy,
+    recoveryInfo,
+    projectRecoveryInfo,
+    restoreRecovery,
+    restoreProject,
+    discardRecovery,
+  } = usePdfEditor();
   const singleRef = useRef<HTMLInputElement>(null);
   const multiRef = useRef<HTMLInputElement>(null);
   const compressRef = useRef<HTMLInputElement>(null);
@@ -109,6 +121,50 @@ export function StartScreen({ onRequestCompression }: { onRequestCompression: ()
       <DoodleBackdrop />
       <div className="relative z-10 mx-auto w-full max-w-7xl">
         <h1 className="sr-only">PDF Maestro: editor y herramientas PDF</h1>
+
+        {(projectRecoveryInfo || recoveryInfo) && (
+          <section className="mb-5 flex flex-col gap-3 rounded-3xl border border-primary/20 bg-card/90 p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center">
+            <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <History className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold">Puedes continuar donde lo dejaste</p>
+              <p className="truncate text-sm text-muted-foreground">
+                {(projectRecoveryInfo ?? recoveryInfo)?.fileName} · guardado automáticamente
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {projectRecoveryInfo && (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    void restoreProject().catch(() =>
+                      toast.error("No se ha podido recuperar el proyecto de la carpeta."),
+                    );
+                  }}
+                >
+                  Recuperar carpeta
+                </Button>
+              )}
+              {recoveryInfo && (
+                <Button
+                  onClick={() => {
+                    void restoreRecovery().catch(() =>
+                      toast.error("No se ha podido recuperar la última sesión."),
+                    );
+                  }}
+                >
+                  Recuperar sesión
+                </Button>
+              )}
+              {recoveryInfo && (
+                <Button variant="ghost" onClick={() => void discardRecovery()}>
+                  Descartar
+                </Button>
+              )}
+            </div>
+          </section>
+        )}
 
         <section
           onDragOver={(event) => {
@@ -185,8 +241,8 @@ export function StartScreen({ onRequestCompression }: { onRequestCompression: ()
               title="Conversores"
               description="Convierte Word ⇄ PDF y transforma fotos JPG o HEIC en un único PDF."
               action={
-                <Button asChild className={toolButtonClass}>
-                  <Link to="/convertir">Abrir conversores</Link>
+                <Button className={toolButtonClass} onClick={() => onOpenTool("convert")}>
+                  Abrir conversores
                 </Button>
               }
             />
@@ -196,8 +252,8 @@ export function StartScreen({ onRequestCompression }: { onRequestCompression: ()
               title="Flipbook interactivo"
               description="Crea un manual con paso de páginas, botones 3D, índice y enlaces en HTML."
               action={
-                <Button asChild className={toolButtonClass}>
-                  <Link to="/flipbook">Crear flipbook</Link>
+                <Button className={toolButtonClass} onClick={() => onOpenTool("flipbook")}>
+                  Crear flipbook
                 </Button>
               }
             />
@@ -207,8 +263,8 @@ export function StartScreen({ onRequestCompression }: { onRequestCompression: ()
               title="OCR de escaneados"
               description="Extrae el texto de PDFs escaneados directamente en tu dispositivo."
               action={
-                <Button asChild className={toolButtonClass}>
-                  <Link to="/ocr">Reconocer texto</Link>
+                <Button className={toolButtonClass} onClick={() => onOpenTool("ocr")}>
+                  Reconocer texto
                 </Button>
               }
             />
@@ -218,8 +274,8 @@ export function StartScreen({ onRequestCompression }: { onRequestCompression: ()
               title="Asistente de estudio"
               description="Pregunta a tus documentos y genera resúmenes con inteligencia artificial local."
               action={
-                <Button asChild className={toolButtonClass}>
-                  <Link to="/ia">Abrir asistente</Link>
+                <Button className={toolButtonClass} onClick={() => onOpenTool("ai")}>
+                  Abrir asistente
                 </Button>
               }
             />

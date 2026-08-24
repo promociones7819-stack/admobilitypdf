@@ -11,15 +11,22 @@ import {
   Undo2,
   Plus,
   FileType2,
+  MoreHorizontal,
   ScanText,
 } from "lucide-react";
-import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePdfEditor, friendlyError } from "@/lib/pdf/store";
 import { CompressPdfDialog } from "./CompressPdfDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function IconAction({
   label,
@@ -35,7 +42,13 @@ function IconAction({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon" onClick={onClick} disabled={disabled}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClick}
+          disabled={disabled}
+          aria-label={label}
+        >
           {children}
         </Button>
       </TooltipTrigger>
@@ -49,11 +62,13 @@ export function TopBar({
   onOpenFlipbook,
   openCompression,
   onCompressionOpened,
+  onOpenTool,
 }: {
   onToggleThumbs: () => void;
   onOpenFlipbook?: () => void;
   openCompression: boolean;
   onCompressionOpened: () => void;
+  onOpenTool: (tool: "convert" | "ocr" | "ai") => void;
 }) {
   const {
     fileName,
@@ -67,6 +82,7 @@ export function TopBar({
     openFiles,
     importFiles,
     closeDocument,
+    autosaveState,
   } = usePdfEditor();
   const openRef = useRef<HTMLInputElement>(null);
   const mergeRef = useRef<HTMLInputElement>(null);
@@ -120,18 +136,55 @@ export function TopBar({
         </Button>
 
         <div className="mx-1 h-6 w-px bg-border" />
-        <IconAction label="Deshacer (Ctrl+Z)" onClick={undo} disabled={!canUndo}>
+        <IconAction label="Deshacer (Ctrl/Cmd+Z)" onClick={undo} disabled={!canUndo}>
           <Undo2 className="size-4" />
         </IconAction>
-        <IconAction label="Rehacer (Ctrl+Shift+Z)" onClick={redo} disabled={!canRedo}>
+        <IconAction label="Rehacer (Ctrl/Cmd+Shift+Z)" onClick={redo} disabled={!canRedo}>
           <Redo2 className="size-4" />
         </IconAction>
 
         <div className="ml-auto flex items-center gap-3">
-          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-            <Link to="/convertir">
-              <FileType2 className="mr-2 size-4" /> Convertir
-            </Link>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="sm:hidden"
+                aria-label="Más herramientas"
+              >
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onSelect={() => addRef.current?.click()}>
+                <Plus className="mr-2 size-4" /> Añadir páginas
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => mergeRef.current?.click()}>
+                <Layers className="mr-2 size-4" /> Combinar PDFs
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={closeDocument}>Nuevo documento</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => onOpenTool("convert")}>
+                <FileType2 className="mr-2 size-4" /> Conversores
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!onOpenFlipbook} onSelect={() => onOpenFlipbook?.()}>
+                <BookOpen className="mr-2 size-4" /> Crear flipbook
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onOpenTool("ocr")}>
+                <ScanText className="mr-2 size-4" /> OCR
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onOpenTool("ai")}>
+                <Sparkles className="mr-2 size-4" /> IA Documentos
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden sm:inline-flex"
+            onClick={() => onOpenTool("convert")}
+          >
+            <FileType2 className="mr-2 size-4" /> Convertir
           </Button>
           <Button
             variant="ghost"
@@ -141,23 +194,35 @@ export function TopBar({
           >
             <BookOpen className="mr-2 size-4" /> Crear flipbook
           </Button>
-          <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
-            <Link to="/ocr">
-              <ScanText className="mr-2 size-4" /> OCR
-            </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden md:inline-flex"
+            onClick={() => onOpenTool("ocr")}
+          >
+            <ScanText className="mr-2 size-4" /> OCR
           </Button>
 
-          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-            <Link to="/ia">
-              <Sparkles className="mr-2 size-4" /> IA Documentos
-            </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden sm:inline-flex"
+            onClick={() => onOpenTool("ai")}
+          >
+            <Sparkles className="mr-2 size-4" /> IA Documentos
           </Button>
           <div className="hidden max-w-[240px] flex-col items-end text-right sm:flex">
             <span className="truncate text-xs font-medium text-foreground">
               {fileName ?? "documento.pdf"}
             </span>
             <span className="text-[11px] text-muted-foreground">
-              {dirty ? "• Cambios sin guardar" : "Sin cambios pendientes"}
+              {autosaveState === "saving"
+                ? "Guardando recuperación…"
+                : autosaveState === "error"
+                  ? "No se pudo autoguardar"
+                  : dirty
+                    ? "• Cambios sin exportar · recuperables"
+                    : "Proyecto recuperable"}
             </span>
           </div>
           <Button

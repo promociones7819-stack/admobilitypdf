@@ -2,19 +2,15 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { getPdfjs } from "./pdfjs";
 import { toast } from "sonner";
-import {
-  buildPdf,
-  downloadBytes,
-  editedFileName,
-  getFontFallbacks,
-  PdfError,
-} from "./export";
+import { buildPdf, downloadBytes, editedFileName, getFontFallbacks, PdfError } from "./export";
 import { getPageSize } from "./render";
 import {
   A4,
@@ -33,8 +29,22 @@ import {
   type ToolId,
 } from "./annotations";
 import type { CoverExportMode } from "./export";
+import {
+  clearRecovery,
+  createWorkspaceSnapshot,
+  getRecoveryInfo,
+  loadRecovery,
+  saveRecovery,
+  type WorkspaceSnapshot,
+} from "./recovery";
+import {
+  getActiveProjectWorkspaceInfo,
+  loadWorkspaceFromActiveProject,
+  saveWorkspaceToActiveProject,
+} from "@/lib/projects/storage";
 
 const MAX_BYTES = 150 * 1024 * 1024;
+const MAX_HISTORY = 100;
 
 /** One undoable snapshot of the working document. */
 interface DocState {
@@ -77,7 +87,7 @@ async function repairBytes(bytes: Uint8Array): Promise<Uint8Array> {
   return doc.save({ useObjectStreams: false });
 }
 
-async function loadSource(file: File): Promise<PdfSource> {
+async function loadSource(file: File, sourceId?: string): Promise<PdfSource> {
   const looksPdf = /\.pdf$/i.test(file.name) || file.type === "application/pdf";
 
   let bytes = new Uint8Array(await file.arrayBuffer());
@@ -132,9 +142,12 @@ async function loadSource(file: File): Promise<PdfSource> {
       }
     }
   }
-  return { id: makeId("src"), name: file.name, bytes, doc, pageCount: doc.numPages };
+  return { id: sourceId ?? makeId("src"), name: file.name, bytes, doc, pageCount: doc.numPages };
 }
 
+function destroySources(sources: Record<string, PdfSource>): void {
+  for (const source of Object.values(sources)) void source.doc.destroy().catch(() => undefined);
+}
 
 interface EditorContextValue {
   sources: Record<string, PdfSource>;
@@ -158,6 +171,7 @@ interface EditorContextValue {
   addAnnotation: (annotation: Annotation) => void;
   updateAnnotation: (id: string, patch: Partial<Annotation>) => void;
   deleteAnnotation: (id: string) => void;
+  duplicateAnnotation: (id: string) => void;
   clearPageAnnotations: (pageId: string) => void;
   toggleCover: (id: string) => void;
   setCoversRevealed: (revealed: boolean, pageId?: string | null) => void;
@@ -186,7 +200,14 @@ interface EditorContextValue {
   download: () => Promise<void>;
   exportFile: () => Promise<File>;
   extractPages: (ids: string[]) => Promise<void>;
+  splitPages: (groups: string[][]) => Promise<void>;
   markSaved: () => void;
+  autosaveState: "idle" | "saving" | "saved" | "error";
+  recoveryInfo: { fileName: string; updatedAt: number } | null;
+  projectRecoveryInfo: { fileName: string; updatedAt: number } | null;
+  restoreRecovery: () => Promise<void>;
+  restoreProject: () => Promise<void>;
+  discardRecovery: () => Promise<void>;
 }
 
 const EditorContext = createContext<EditorContextValue | null>(null);
@@ -210,20 +231,41 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
   const [selectedAnnotationId, setSelectedAnnotation] = useState<string | null>(null);
   const [studyMode, setStudyMode] = useState(false);
   const [coverExport, setCoverExport] = useState<CoverExportMode>("omit");
+  const [autosaveState, setAutosaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [recoveryInfo, setRecoveryInfo] = useState<{
+    fileName: string;
+    updatedAt: number;
+  } | null>(null);
+  const [projectRecoveryInfo, setProjectRecoveryInfo] = useState<{
+    fileName: string;
+    updatedAt: number;
+  } | null>(null);
+  const [projectRevision, setProjectRevision] = useState(0);
+  const autosaveRun = useRef(0);
+  const autosaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const sourcesRef = useRef<Record<string, PdfSource>>({});
 
   const doc = history[historyIndex] ?? EMPTY_DOC;
   const pages = doc.pages;
   const annotations = doc.annotations;
+  const dirty = historyIndex !== savedIndex;
+
+  useEffect(() => {
+    sourcesRef.current = sources;
+  }, [sources]);
+
+  useEffect(() => () => destroySources(sourcesRef.current), []);
 
   const commit = useCallback(
     (updater: (current: DocState) => DocState) => {
-      setHistory((prev) => {
-        const current = prev[historyIndex] ?? EMPTY_DOC;
-        return [...prev.slice(0, historyIndex + 1), updater(current)];
-      });
-      setHistoryIndex((i) => i + 1);
+      const current = history[historyIndex] ?? EMPTY_DOC;
+      const next = [...history.slice(0, historyIndex + 1), updater(current)];
+      const overflow = Math.max(0, next.length - MAX_HISTORY);
+      setHistory(overflow ? next.slice(overflow) : next);
+      setHistoryIndex(next.length - 1 - overflow);
+      if (overflow) setSavedIndex((index) => Math.max(-1, index - overflow));
     },
-    [historyIndex],
+    [history, historyIndex],
   );
 
   const resetHistory = useCallback((next: DocState) => {
@@ -231,6 +273,129 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     setHistoryIndex(0);
     setSavedIndex(0);
   }, []);
+
+  const restoreSnapshot = useCallback(
+    async (snapshot: WorkspaceSnapshot) => {
+      if (
+        dirty &&
+        !window.confirm("Hay cambios sin guardar. ¿Quieres sustituir el documento actual?")
+      ) {
+        return;
+      }
+      setBusy(true);
+      try {
+        const restoredSources: Record<string, PdfSource> = {};
+        for (const source of snapshot.sources) {
+          const file = new File([source.bytes], source.name, { type: "application/pdf" });
+          const loaded = await loadSource(file, source.id);
+          restoredSources[loaded.id] = loaded;
+        }
+        destroySources(sources);
+        setSources(restoredSources);
+        setImages(
+          Object.fromEntries(
+            snapshot.images.map((image) => [
+              image.id,
+              {
+                id: image.id,
+                mime: image.mime,
+                width: image.width,
+                height: image.height,
+                bytes: new Uint8Array(image.bytes),
+              },
+            ]),
+          ),
+        );
+        resetHistory({ pages: snapshot.pages, annotations: snapshot.annotations });
+        setFileName(snapshot.fileName);
+        setCoverExport(snapshot.coverExport);
+        setSelectionState(snapshot.pages[0] ? [snapshot.pages[0].id] : []);
+        setActivePageId(snapshot.pages[0]?.id ?? null);
+        setSelectedAnnotation(null);
+        setToolState("select");
+        toast.success(`Proyecto «${snapshot.fileName}» recuperado`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [dirty, resetHistory, sources],
+  );
+
+  const restoreRecovery = useCallback(async () => {
+    const snapshot = await loadRecovery();
+    if (!snapshot) throw new Error("recovery-unavailable");
+    await restoreSnapshot(snapshot);
+  }, [restoreSnapshot]);
+
+  const restoreProject = useCallback(async () => {
+    const snapshot = await loadWorkspaceFromActiveProject();
+    if (!snapshot) throw new Error("project-recovery-unavailable");
+    await restoreSnapshot(snapshot);
+  }, [restoreSnapshot]);
+
+  const discardRecovery = useCallback(async () => {
+    await clearRecovery();
+    setRecoveryInfo(null);
+  }, []);
+
+  useEffect(() => {
+    void getRecoveryInfo()
+      .then(setRecoveryInfo)
+      .catch(() => undefined);
+    const onProjectActive = () => {
+      setProjectRevision((value) => value + 1);
+      void getActiveProjectWorkspaceInfo()
+        .then(setProjectRecoveryInfo)
+        .catch(() => {
+          setProjectRecoveryInfo(null);
+        });
+    };
+    window.addEventListener("pdf-maestro:project-active", onProjectActive);
+    return () => window.removeEventListener("pdf-maestro:project-active", onProjectActive);
+  }, []);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const protect = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", protect);
+    return () => window.removeEventListener("beforeunload", protect);
+  }, [dirty]);
+
+  useEffect(() => {
+    if (!pages.length) return;
+    const runId = ++autosaveRun.current;
+    setAutosaveState("saving");
+    const timer = window.setTimeout(() => {
+      const snapshot = createWorkspaceSnapshot({
+        fileName,
+        pages,
+        annotations,
+        coverExport,
+        sources,
+        images,
+      });
+      const save = autosaveQueue.current
+        .catch(() => undefined)
+        .then(async () => {
+          await Promise.all([saveRecovery(snapshot), saveWorkspaceToActiveProject(snapshot)]);
+        });
+      autosaveQueue.current = save;
+      void save
+        .then(() => {
+          if (autosaveRun.current !== runId) return;
+          setAutosaveState("saved");
+          setRecoveryInfo({ fileName: snapshot.fileName, updatedAt: snapshot.updatedAt });
+        })
+        .catch((error) => {
+          console.warn("[pdf] no se pudo guardar la recuperación automática", error);
+          if (autosaveRun.current === runId) setAutosaveState("error");
+        });
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [annotations, coverExport, fileName, images, pages, projectRevision, sources]);
 
   const pagesFromSource = (source: PdfSource): PageEntry[] =>
     Array.from({ length: source.pageCount }, (_, i) => ({
@@ -242,6 +407,13 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
 
   const openFiles = useCallback(
     async (files: File[], opts?: { force?: boolean }) => {
+      if (
+        !opts?.force &&
+        dirty &&
+        !window.confirm("Hay cambios sin guardar. ¿Quieres abrir otro documento y sustituirlos?")
+      ) {
+        return;
+      }
       // PDFs muy grandes: el usuario decide (optimizar / original / cancelar).
       if (!opts?.force) {
         const oversized = files.filter((f) => f.size > MAX_BYTES);
@@ -258,11 +430,10 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
         const nextSources: Record<string, PdfSource> = {};
         for (const s of loaded) nextSources[s.id] = s;
         const nextPages = loaded.flatMap(pagesFromSource);
+        destroySources(sources);
         setSources(nextSources);
         resetHistory({ pages: nextPages, annotations: [] });
-        setFileName(
-          loaded.length === 1 ? (loaded[0]?.name ?? null) : "documento-combinado.pdf",
-        );
+        setFileName(loaded.length === 1 ? (loaded[0]?.name ?? null) : "documento-combinado.pdf");
         setSelectionState(nextPages[0] ? [nextPages[0].id] : []);
         setActivePageId(nextPages[0]?.id ?? null);
         setSelectedAnnotation(null);
@@ -271,9 +442,8 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
         setBusy(false);
       }
     },
-    [resetHistory],
+    [dirty, resetHistory, sources],
   );
-
 
   const importFiles = useCallback(
     async (files: File[], insertAfterPageId?: string | null) => {
@@ -292,11 +462,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
           : pages.length;
         commit((current) => ({
           ...current,
-          pages: [
-            ...current.pages.slice(0, at),
-            ...newPages,
-            ...current.pages.slice(at),
-          ],
+          pages: [...current.pages.slice(0, at), ...newPages, ...current.pages.slice(at)],
         }));
         if (newPages[0]) {
           setSelectionState([newPages[0].id]);
@@ -313,8 +479,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
   const addBlankPage = useCallback(
     async (insertAfterPageId?: string | null) => {
       const anchorId = insertAfterPageId ?? activePageId;
-      const reference =
-        pages.find((p) => p.id === anchorId) ?? pages[pages.length - 1] ?? null;
+      const reference = pages.find((p) => p.id === anchorId) ?? pages[pages.length - 1] ?? null;
       let size = A4;
       if (reference) {
         if (reference.blank) size = reference.blank;
@@ -336,9 +501,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
         rotation: 0,
         blank: { width: size.width, height: size.height },
       };
-      const at = anchorId
-        ? pages.findIndex((p) => p.id === anchorId) + 1
-        : pages.length;
+      const at = anchorId ? pages.findIndex((p) => p.id === anchorId) + 1 : pages.length;
       commit((current) => {
         const index = anchorId
           ? current.pages.findIndex((p) => p.id === anchorId) + 1
@@ -346,11 +509,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
         const insertAt = index > 0 ? index : at;
         return {
           ...current,
-          pages: [
-            ...current.pages.slice(0, insertAt),
-            blankPage,
-            ...current.pages.slice(insertAt),
-          ],
+          pages: [...current.pages.slice(0, insertAt), blankPage, ...current.pages.slice(insertAt)],
         };
       });
       setActivePageId(blankPage.id);
@@ -360,8 +519,9 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     [activePageId, commit, pages, sources],
   );
 
-
   const closeDocument = useCallback(() => {
+    if (dirty && !window.confirm("Hay cambios sin guardar. ¿Quieres cerrar el documento?")) return;
+    destroySources(sources);
     setSources({});
     setImages({});
     resetHistory(EMPTY_DOC);
@@ -370,7 +530,12 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     setActivePageId(null);
     setSelectedAnnotation(null);
     setToolState("select");
-  }, [resetHistory]);
+    setRecoveryInfo(null);
+    autosaveRun.current += 1;
+    const clear = autosaveQueue.current.catch(() => undefined).then(clearRecovery);
+    autosaveQueue.current = clear;
+    void clear;
+  }, [dirty, resetHistory, sources]);
 
   const deletePages = useCallback(
     (ids: string[]) => {
@@ -480,6 +645,22 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const duplicateAnnotation = useCallback(
+    (id: string) => {
+      const source = annotations.find((annotation) => annotation.id === id);
+      if (!source) return;
+      const copy: Annotation = {
+        ...source,
+        id: makeId("ann"),
+        x: Math.min(1 - source.width, source.x + 0.02),
+        y: Math.min(1 - source.height, source.y + 0.02),
+        ...(source.points ? { points: source.points.map((point) => ({ ...point })) } : {}),
+      };
+      addAnnotation(copy);
+    },
+    [addAnnotation, annotations],
+  );
+
   const clearPageAnnotations = useCallback(
     (pageId: string) => {
       commit((current) => ({
@@ -585,6 +766,44 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     [annotations, coverExport, fileName, images, pages, sources],
   );
 
+  const splitPages = useCallback(
+    async (groups: string[][]) => {
+      const validGroups = groups.filter((group) => group.length > 0);
+      if (validGroups.length === 0) return;
+      setBusy(true);
+      try {
+        const base = (fileName ?? "documento").replace(/\.pdf$/i, "");
+        if (validGroups.length === 1) {
+          const subset = pages.filter((page) => validGroups[0]!.includes(page.id));
+          const bytes = await buildPdf(subset, sources, {
+            annotations,
+            images,
+            coverMode: coverExport,
+          });
+          await downloadBytes(bytes, `${base}-parte-1.pdf`);
+          return;
+        }
+        const { default: JSZip } = await import("jszip");
+        const zip = new JSZip();
+        for (let index = 0; index < validGroups.length; index += 1) {
+          const ids = validGroups[index]!;
+          const subset = pages.filter((page) => ids.includes(page.id));
+          const bytes = await buildPdf(subset, sources, {
+            annotations,
+            images,
+            coverMode: coverExport,
+          });
+          zip.file(`${base}-parte-${index + 1}.pdf`, bytes);
+        }
+        const archive = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+        await downloadBytes(archive, `${base}-dividido.zip`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [annotations, coverExport, fileName, images, pages, sources],
+  );
+
   const toggleSelection = useCallback((id: string, additive: boolean) => {
     setSelectionState((prev) => {
       if (!additive) return [id];
@@ -609,7 +828,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       annotations,
       images,
       fileName,
-      dirty: historyIndex !== savedIndex,
+      dirty,
       busy,
       selection,
       activePageId,
@@ -625,6 +844,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       addAnnotation,
       updateAnnotation,
       deleteAnnotation,
+      duplicateAnnotation,
       clearPageAnnotations,
       toggleCover,
       setCoversRevealed,
@@ -656,7 +876,14 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       download,
       exportFile,
       extractPages,
+      splitPages,
       markSaved: () => setSavedIndex(historyIndex),
+      autosaveState,
+      recoveryInfo,
+      projectRecoveryInfo,
+      restoreRecovery,
+      restoreProject,
+      discardRecovery,
     }),
     [
       activePageId,
@@ -672,11 +899,14 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       closeDocument,
 
       deleteAnnotation,
+      duplicateAnnotation,
       deletePages,
+      dirty,
       download,
       exportFile,
       duplicatePages,
       extractPages,
+      splitPages,
       fileName,
       history.length,
       historyIndex,
@@ -689,8 +919,12 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       largePrompt,
       pages,
       redo,
+      recoveryInfo,
+      projectRecoveryInfo,
+      restoreRecovery,
+      restoreProject,
+      discardRecovery,
       rotatePages,
-      savedIndex,
       selectedAnnotationId,
       selection,
       setStyle,
@@ -701,6 +935,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       tool,
       undo,
       updateAnnotation,
+      autosaveState,
     ],
   );
 

@@ -34,7 +34,6 @@ import startUnix from "./standalone/iniciar-mac-linux.command.txt?raw";
 import type { FlipbookPage, OutlineEntry } from "./document";
 import type { FlipbookConfig } from "./hotspots";
 
-
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -128,7 +127,6 @@ export async function buildFlipbookZip(options: {
   if (!folder) throw new Error("No se pudo crear el ZIP");
 
   const title = publicationName(options.docName);
-
 
   folder.file("index.html", indexHtml.replaceAll("__TITLE__", escapeHtml(title)));
   folder.file("document.pdf", await options.file.arrayBuffer());

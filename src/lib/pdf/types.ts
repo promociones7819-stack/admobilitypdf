@@ -31,7 +31,6 @@ export const BLANK_SOURCE_ID = "__blank__";
 /** A4 in points, used when there is no reference page. */
 export const A4 = { width: 595.28, height: 841.89 };
 
-
 export interface AnnotationBase {
   id: string;
   pageId: string;

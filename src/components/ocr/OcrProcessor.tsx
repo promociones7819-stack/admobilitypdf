@@ -1,5 +1,14 @@
-import { useRef, useState } from "react";
-import { Download, Copy, Loader2, ShieldCheck, UploadCloud, ScanText } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Download,
+  Copy,
+  FileSearch,
+  Loader2,
+  ShieldCheck,
+  UploadCloud,
+  ScanText,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -16,9 +25,51 @@ import { saveBlob } from "@/lib/download";
 
 type Lang = "spa" | "eng";
 
+type OcrWorker = {
+  recognize: (image: unknown) => Promise<{ data: { text: string } }>;
+  terminate: () => Promise<unknown>;
+};
+
 const MAX_BYTES = 100 * 1024 * 1024;
 
-export function OcrProcessor() {
+async function createSearchablePdf(bytes: Uint8Array, pageTexts: string[]): Promise<Uint8Array> {
+  const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
+  const doc = await PDFDocument.load(bytes.slice(0), {
+    ignoreEncryption: true,
+    throwOnInvalidObject: false,
+  });
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const pages = doc.getPages();
+  pages.forEach((page, index) => {
+    const text = (pageTexts[index] ?? "")
+      .replace(/[^\u0020-\u00ff\n]/g, "?")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join("\n")
+      .slice(0, 30_000);
+    if (!text) return;
+    page.drawText(text, {
+      x: 2,
+      y: Math.max(2, page.getHeight() - 4),
+      size: 1,
+      lineHeight: 1.15,
+      font,
+      color: rgb(0, 0, 0),
+      opacity: 0,
+      maxWidth: Math.max(1, page.getWidth() - 4),
+    });
+  });
+  return doc.save({ useObjectStreams: true });
+}
+
+export function OcrProcessor({
+  initialFile,
+  onPdfCreated,
+}: {
+  initialFile?: File | null;
+  onPdfCreated?: (file: File) => Promise<void> | void;
+} = {}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -27,6 +78,11 @@ export function OcrProcessor() {
   const [text, setText] = useState("");
   const [language, setLanguage] = useState<Lang>("spa");
   const [fileName, setFileName] = useState<string | null>(null);
+  const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
+  const [pageTexts, setPageTexts] = useState<string[]>([]);
+  const workerRef = useRef<OcrWorker | null>(null);
+  const cancelledRef = useRef(false);
+  const initialRef = useRef<File | null>(null);
 
   async function processPdf(file: File | undefined) {
     if (!file || busy) return;
@@ -42,17 +98,17 @@ export function OcrProcessor() {
     setBusy(true);
     setProgress(0);
     setText("");
+    setPageTexts([]);
+    setSourceBytes(null);
     setFileName(file.name);
     setStatus("Leyendo el archivo PDF…");
 
-    type OcrWorker = {
-      recognize: (image: unknown) => Promise<{ data: { text: string } }>;
-      terminate: () => Promise<unknown>;
-    };
     let worker: OcrWorker | null = null;
+    cancelledRef.current = false;
 
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
+      setSourceBytes(bytes);
       const pdfjs = await getPdfjs();
       const pdf = await pdfjs.getDocument({ data: bytes }).promise;
       const numPages = pdf.numPages;
@@ -60,9 +116,11 @@ export function OcrProcessor() {
       setStatus("Inicializando el motor OCR (primera vez puede tardar)…");
       const { createWorker } = await import("tesseract.js");
       worker = (await createWorker(language)) as unknown as OcrWorker;
+      workerRef.current = worker;
 
       const parts: string[] = [];
       for (let i = 1; i <= numPages; i++) {
+        if (cancelledRef.current) break;
         setStatus(`Procesando página ${i} de ${numPages}…`);
         const page = await pdf.getPage(i);
         const viewport = page.getViewport({ scale: 2 });
@@ -85,22 +143,60 @@ export function OcrProcessor() {
         canvas.height = 0;
       }
 
+      setPageTexts(parts.map((part) => part.replace(/^--- Página \d+ ---\n/, "")));
+      if (cancelledRef.current) {
+        setStatus("OCR cancelado. Puedes conservar el texto ya reconocido.");
+        return;
+      }
+
       setStatus(`OCR completado: ${numPages} página(s).`);
       toast.success("Texto extraído con OCR");
     } catch (error) {
-      console.error(error);
-      setStatus("");
-      toast.error("No se ha podido procesar el PDF con OCR.");
+      if (!cancelledRef.current) {
+        console.error(error);
+        setStatus("");
+        toast.error("No se ha podido procesar el PDF con OCR.");
+      }
     } finally {
       await worker?.terminate().catch(() => undefined);
+      workerRef.current = null;
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!initialFile || initialRef.current === initialFile) return;
+    initialRef.current = initialFile;
+    void processPdf(initialFile);
+    // El fichero inicial solo se procesa una vez por identidad.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile]);
 
   async function downloadTxt() {
     const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
     const name = (fileName ?? "documento.pdf").replace(/\.pdf$/i, "") + "-ocr.txt";
     await saveBlob(blob, name);
+  }
+
+  async function downloadSearchablePdf() {
+    if (!sourceBytes || !pageTexts.length) return;
+    try {
+      const bytes = await createSearchablePdf(sourceBytes, pageTexts);
+      const name = (fileName ?? "documento.pdf").replace(/\.pdf$/i, "") + "-ocr-buscable.pdf";
+      const file = new File([bytes.slice(0) as unknown as BlobPart], name, {
+        type: "application/pdf",
+      });
+      if (onPdfCreated) {
+        await onPdfCreated(file);
+        toast.success("PDF buscable abierto en el editor");
+      } else {
+        await saveBlob(file, name);
+        toast.success("PDF buscable guardado");
+      }
+    } catch (error) {
+      console.error("[ocr] PDF buscable", error);
+      toast.error("No se ha podido crear el PDF buscable.");
+    }
   }
 
   return (
@@ -109,16 +205,13 @@ export function OcrProcessor() {
         <div className="flex-1 space-y-1">
           <h2 className="text-lg font-semibold tracking-tight">OCR local de PDF</h2>
           <p className="text-sm text-muted-foreground">
-            Reconoce texto de PDFs escaneados. Todo el proceso ocurre en tu navegador.
+            Reconoce texto de PDFs escaneados. El archivo se procesa en tu navegador; la primera vez
+            puede necesitar Internet para descargar el motor y el idioma.
           </p>
         </div>
         <div className="w-40 space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Idioma</label>
-          <Select
-            value={language}
-            onValueChange={(v) => setLanguage(v as Lang)}
-            disabled={busy}
-          >
+          <Select value={language} onValueChange={(v) => setLanguage(v as Lang)} disabled={busy}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -160,6 +253,19 @@ export function OcrProcessor() {
         >
           <UploadCloud className="mr-2 size-4" /> Seleccionar PDF
         </Button>
+        {busy && (
+          <Button
+            className="mt-4"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              cancelledRef.current = true;
+              void workerRef.current?.terminate();
+            }}
+          >
+            <X className="mr-2 size-4" /> Cancelar
+          </Button>
+        )}
         <input
           ref={inputRef}
           type="file"
@@ -208,12 +314,19 @@ export function OcrProcessor() {
           <Button size="sm" disabled={!text} onClick={downloadTxt}>
             <Download className="mr-2 size-4" /> Descargar .txt
           </Button>
+          <Button
+            size="sm"
+            disabled={!pageTexts.length || !sourceBytes}
+            onClick={() => void downloadSearchablePdf()}
+          >
+            <FileSearch className="mr-2 size-4" /> Crear PDF buscable
+          </Button>
         </div>
       </div>
 
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
-        <ShieldCheck className="size-4 text-primary" /> Procesamiento 100 % local: tu PDF
-        nunca se sube a un servidor.
+        <ShieldCheck className="size-4 text-primary" /> Procesamiento privado: tu PDF nunca se sube
+        a un servidor.
       </p>
     </section>
   );

@@ -73,8 +73,7 @@ export async function runOptimization(
   target: number,
   onProgress?: (p: OptimizeProgress) => void,
 ): Promise<OptimizeRun> {
-  const canUseWorker =
-    typeof Worker !== "undefined" && typeof OffscreenCanvas !== "undefined";
+  const canUseWorker = typeof Worker !== "undefined" && typeof OffscreenCanvas !== "undefined";
   if (canUseWorker) {
     try {
       return await runInWorker(bytes, level, target, onProgress);

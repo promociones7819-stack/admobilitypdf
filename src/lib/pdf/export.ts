@@ -61,7 +61,11 @@ async function loadLibDocs(
 
 /** Base-14 fonts only cover WinAnsi; embedded TTFs handle full Unicode. */
 function sanitizeText(value: string, embedded: boolean): string {
-  return embedded ? value : value.replace(/[^\u0000-\u00ff]/g, "?");
+  return embedded
+    ? value
+    : Array.from(value, (character) =>
+        (character.codePointAt(0) ?? 0) <= 0xff ? character : "?",
+      ).join("");
 }
 
 export interface ResolvedFont {
@@ -162,12 +166,7 @@ async function createFontResolver(out: PDFDocument): Promise<FontResolver> {
 }
 
 /** Splits text into lines that fit `maxWidth` (in points). */
-export function wrapLines(
-  text: string,
-  font: PDFFont,
-  size: number,
-  maxWidth: number,
-): string[] {
+export function wrapLines(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
   const out: string[] = [];
   const width = (value: string) => {
     try {
@@ -333,6 +332,46 @@ function drawAnnotation(ctx: DrawContext, annotation: Annotation, images: Map<st
       drawStroke(ctx, annotation, true);
       break;
     }
+    case "line":
+    case "arrow": {
+      const points =
+        annotation.points?.length === 2
+          ? annotation.points
+          : [
+              { x: 0, y: 0 },
+              { x: 1, y: 1 },
+            ];
+      drawStroke(ctx, { ...annotation, points }, true);
+      if (annotation.kind === "arrow") {
+        const fromPoint = points[0]!;
+        const tipPoint = points[1]!;
+        const from = map(
+          annotation.x + fromPoint.x * annotation.width,
+          annotation.y + fromPoint.y * annotation.height,
+        );
+        const tip = map(
+          annotation.x + tipPoint.x * annotation.width,
+          annotation.y + tipPoint.y * annotation.height,
+        );
+        const angle = Math.atan2(tip.y - from.y, tip.x - from.x);
+        const distance = Math.hypot(tip.x - from.x, tip.y - from.y);
+        const head = Math.max(6, Math.min(18, distance * 0.25));
+        for (const offset of [-0.55, 0.55]) {
+          page.drawLine({
+            start: tip,
+            end: {
+              x: tip.x - Math.cos(angle + offset) * head,
+              y: tip.y - Math.sin(angle + offset) * head,
+            },
+            thickness: Math.max(0.75, annotation.strokeWidth),
+            color,
+            opacity: annotation.opacity,
+            lineCap: LineCapStyle.Round,
+          });
+        }
+      }
+      break;
+    }
     case "text": {
       const size = annotation.fontSize ?? 16;
       const raw = sanitizeText(annotation.text ?? "", ctx.fontEmbedded);
@@ -383,7 +422,8 @@ function drawAnnotation(ctx: DrawContext, annotation: Annotation, images: Map<st
       break;
     }
 
-    case "image": {
+    case "image":
+    case "signature": {
       const embedded = annotation.imageId ? images.get(annotation.imageId) : undefined;
       if (!embedded) break;
       page.drawImage(embedded as Parameters<PDFPage["drawImage"]>[0], {

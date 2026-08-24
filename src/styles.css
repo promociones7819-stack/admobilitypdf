@@ -18,14 +18,24 @@
     0 8px 14px rgba(15, 23, 42, 0.38);
   text-shadow: 0 2px 2px rgba(15, 23, 42, 0.5);
   cursor: pointer;
-  transition: filter 0.15s, transform 0.15s, box-shadow 0.15s;
+  transition:
+    filter 0.15s,
+    transform 0.15s,
+    box-shadow 0.15s;
 }
-.flipbook-3d-button:hover { filter: brightness(1.12); transform: translateY(-1px); }
+.flipbook-3d-button:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
 .flipbook-3d-button:active {
   transform: translateY(4px);
-  box-shadow: inset 0 2px 4px rgba(15, 23, 42, 0.35), 0 1px 0 #172554;
+  box-shadow:
+    inset 0 2px 4px rgba(15, 23, 42, 0.35),
+    0 1px 0 #172554;
 }
-.flipbook-3d-arrow { border-radius: 14px; }
+.flipbook-3d-arrow {
+  border-radius: 14px;
+}
 .flipbook-3d-brand {
   overflow: hidden;
   padding: 4px;
@@ -85,7 +95,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-
 /*
  * Design system definition.
  *
@@ -101,7 +110,7 @@
  */
 
 @theme inline {
-  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -199,7 +208,6 @@
   --sidebar-border: oklch(0.916 0.005 250);
   --sidebar-ring: oklch(0.52 0.115 232);
 }
-
 
 .dark {
   --background: oklch(0.129 0.042 264.695);

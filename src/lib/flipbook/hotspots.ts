@@ -14,13 +14,7 @@ export type HotspotAction =
   | { type: "menu" };
 
 export type HotspotButtonPreset =
-  | "circle"
-  | "square"
-  | "arrow-left"
-  | "arrow-right"
-  | "arrow-up"
-  | "arrow-down"
-  | "ad-mobility";
+  "circle" | "square" | "arrow-left" | "arrow-right" | "arrow-up" | "arrow-down" | "ad-mobility";
 
 export interface Hotspot {
   id: string;
@@ -48,9 +42,9 @@ export const EMPTY_CONFIG: FlipbookConfig = { version: 1, menuPage: 1, hotspots:
 
 const PREFIX = "flipbook-hotspots:";
 
-/** Clave local estable por documento (nombre + tamaño), sin subir nada a ningún sitio. */
-export function documentKey(file: { name: string; size: number }): string {
-  return `${file.name}::${file.size}`;
+/** Clave local estable por documento, sin subir nada a ningún sitio. */
+export function documentKey(file: { name: string; size: number; lastModified?: number }): string {
+  return `${file.name}::${file.size}::${file.lastModified ?? 0}`;
 }
 
 export function makeHotspotId(): string {

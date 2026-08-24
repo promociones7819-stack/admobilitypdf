@@ -1,5 +1,14 @@
 # PDF Maestro
 
+## Abrir la aplicación en local
+
+En macOS, usa **clic derecho > Abrir** sobre `iniciar-app-local.command`. La aplicación se abrirá
+en `http://127.0.0.1:4173`; esa dirección pertenece únicamente a tu ordenador. Consulta
+`LEEME-APP-LOCAL.txt` si macOS muestra un aviso de permisos.
+
+Los flipbooks pueden exportarse como un único archivo HTML que sí se abre directamente con doble
+clic, sin servidor ni instalación.
+
 Crea una Web App completa de edición de PDFs
 
 Quiero crear una web app profesional para editar, organizar y anotar archivos PDF, similar en concepto a un editor PDF sencillo tipo Adobe Acrobat, pero con una interfaz mucho más limpia, moderna y fácil de usar.
@@ -744,7 +753,7 @@ Controles:
 
 100%
 
-+
+-
 
 También:
 

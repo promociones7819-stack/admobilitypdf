@@ -78,7 +78,10 @@ interface AiContextValue {
   toggleSource: (id: string, enabled: boolean) => Promise<void>;
   ask: (question: string, options?: { scope?: RetrievalScope; mode?: AnswerMode }) => Promise<void>;
   resetChat: () => Promise<void>;
-  runTool: (prompt: string, options?: { scope?: RetrievalScope; topK?: number }) => Promise<{
+  runTool: (
+    prompt: string,
+    options?: { scope?: RetrievalScope; topK?: number },
+  ) => Promise<{
     answer: string;
     citations: Citation[];
   }>;
@@ -198,15 +201,12 @@ export function AiProvider({ children }: { children: ReactNode }) {
     [notebooks],
   );
 
-  const removeNotebook = useCallback(
-    async (id: string) => {
-      await dbDeleteNotebook(id);
-      invalidateNotebook(id);
-      setNotebooks((prev) => prev.filter((notebook) => notebook.id !== id));
-      setActiveId((prev) => (prev === id ? null : prev));
-    },
-    [],
-  );
+  const removeNotebook = useCallback(async (id: string) => {
+    await dbDeleteNotebook(id);
+    invalidateNotebook(id);
+    setNotebooks((prev) => prev.filter((notebook) => notebook.id !== id));
+    setActiveId((prev) => (prev === id ? null : prev));
+  }, []);
 
   const upsertSource = useCallback((source: Source) => {
     setSources((prev) => {

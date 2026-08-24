@@ -39,7 +39,11 @@ export function ProjectBar() {
         {projects.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 text-white hover:bg-white/10 hover:text-white">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-white hover:bg-white/10 hover:text-white"
+              >
                 Proyectos <ChevronDown className="ml-2 size-3.5" />
               </Button>
             </DropdownMenuTrigger>
@@ -50,7 +54,9 @@ export function ProjectBar() {
                   key={project.id}
                   onSelect={() => {
                     void selectProject(project).then((ok) =>
-                      ok ? toast.success(`Proyecto «${project.name}» activado`) : toast.error("Permiso de carpeta denegado"),
+                      ok
+                        ? toast.success(`Proyecto «${project.name}» activado`)
+                        : toast.error("Permiso de carpeta denegado"),
                     );
                   }}
                 >
@@ -66,7 +72,11 @@ export function ProjectBar() {
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        <Button size="sm" className="h-8 bg-sky-500 text-white hover:bg-sky-400" onClick={() => void pick()}>
+        <Button
+          size="sm"
+          className="h-8 bg-sky-500 text-white hover:bg-sky-400"
+          onClick={() => void pick()}
+        >
           <FolderOpen className="mr-2 size-4" />
           {current ? "Cambiar carpeta" : "Asignar carpeta"}
         </Button>

@@ -44,7 +44,7 @@ const LEVELS: Array<{ value: OptimizeLevel; label: string; hint: string; target:
   {
     value: "max",
     label: "Máxima reducción",
-    hint: "Genera el archivo más pequeño posible.",
+    hint: "Prioriza el tamaño. Si el PDF contiene texto, lo conserva para que siga siendo buscable.",
     target: 0.35,
   },
 ];
@@ -67,7 +67,7 @@ export function CompressPdfDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { exportFile, markSaved } = usePdfEditor();
+  const { exportFile, markSaved, openFiles } = usePdfEditor();
   const [level, setLevel] = useState<OptimizeLevel>("balanced");
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<OptimizeProgress | null>(null);
@@ -127,6 +127,16 @@ export function CompressPdfDialog({
     close();
   }
 
+  async function continueWithReducedCopy() {
+    if (!result) return;
+    const file = new File([result.bytes.slice(0) as unknown as BlobPart], outputName, {
+      type: "application/pdf",
+    });
+    await openFiles([file], { force: true });
+    toast.success("Copia reducida abierta: puedes seguir editándola");
+    close();
+  }
+
   return (
     <Dialog
       open={open}
@@ -173,9 +183,17 @@ export function CompressPdfDialog({
               <span>{reduction}%</span>
             </div>
             <p className="pt-1 text-xs text-muted-foreground">
-              {reduction > 0
-                ? "La copia reducida conserva los cambios visibles del editor."
-                : "El archivo ya estaba optimizado; se conservará con su tamaño actual."}
+              {result.strategy === "raster"
+                ? result.textPreserved
+                  ? "La copia reducida conserva los cambios visibles; era un documento principalmente escaneado."
+                  : "La copia reducida conserva el aspecto visual, pero el texto y los enlaces se han convertido en imagen."
+                : reduction > 0
+                  ? "La copia reducida conserva texto, enlaces y todos los cambios del editor."
+                  : "El archivo ya estaba optimizado; se conservará con su tamaño actual."}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              «Usar copia reducida» permite continuar editando; los cambios actuales quedan
+              integrados visualmente en sus páginas.
             </p>
           </div>
         ) : (
@@ -204,6 +222,9 @@ export function CompressPdfDialog({
             <>
               <Button variant="outline" onClick={() => setResult(null)}>
                 Probar otro nivel
+              </Button>
+              <Button variant="outline" onClick={() => void continueWithReducedCopy()}>
+                Usar copia reducida
               </Button>
               <Button onClick={() => void download()}>
                 <Download className="mr-2 size-4" /> Descargar PDF reducido

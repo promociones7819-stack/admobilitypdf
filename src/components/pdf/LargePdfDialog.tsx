@@ -36,7 +36,11 @@ const LEVELS: { value: OptimizeLevel; label: string; hint: string }[] = [
   },
   { value: "quality", label: "Máxima calidad", hint: "Reduce solo lo imprescindible." },
   { value: "balanced", label: "Equilibrado", hint: "Buen equilibrio tamaño/legibilidad." },
-  { value: "max", label: "Máxima compresión", hint: "El archivo más pequeño posible." },
+  {
+    value: "max",
+    label: "Máxima compresión",
+    hint: "Prioriza el tamaño y conserva el texto cuando el documento no es escaneado.",
+  },
 ];
 
 const PHASES: Record<OptimizeProgress["phase"], string> = {
@@ -89,7 +93,7 @@ export function LargePdfDialog() {
     }
   }
 
-  async function useOptimized() {
+  async function openOptimized() {
     if (!result || !file) return;
     const name = file.name.replace(/\.pdf$/i, "") + "-optimizado.pdf";
     const copy = new File([result.bytes.slice(0) as unknown as BlobPart], name, {
@@ -101,7 +105,7 @@ export function LargePdfDialog() {
     toast.success("PDF optimizado abierto en el editor");
   }
 
-  async function useOriginal() {
+  async function openOriginal() {
     const files = largePrompt?.files ?? [];
     reset();
     await openFiles(files, { force: true });
@@ -128,10 +132,9 @@ export function LargePdfDialog() {
             PDF de gran tamaño
           </DialogTitle>
           <DialogDescription>
-            Este PDF supera el tamaño recomendado para trabajar cómodamente en la
-            aplicación.
-            {file ? ` (${file.name} — ${formatMB(file.size)})` : ""} El original nunca se
-            modifica: se crea una copia optimizada.
+            Este PDF supera el tamaño recomendado para trabajar cómodamente en la aplicación.
+            {file ? ` (${file.name} — ${formatMB(file.size)})` : ""} El original nunca se modifica:
+            se crea una copia optimizada.
           </DialogDescription>
         </DialogHeader>
 
@@ -145,9 +148,7 @@ export function LargePdfDialog() {
                 : ""}
             </p>
             <Progress
-              value={
-                progress && progress.total > 0 ? (progress.done / progress.total) * 100 : 5
-              }
+              value={progress && progress.total > 0 ? (progress.done / progress.total) * 100 : 5}
             />
             <p className="text-xs text-muted-foreground">
               Todo el proceso ocurre en tu dispositivo. Puede tardar unos minutos.
@@ -210,13 +211,12 @@ export function LargePdfDialog() {
                   setShowLevels(true);
                 }}
               >
-
                 Intentar otra compresión
               </Button>
-              <Button variant="outline" onClick={() => void useOriginal()}>
+              <Button variant="outline" onClick={() => void openOriginal()}>
                 Trabajar con el original
               </Button>
-              <Button onClick={() => void useOptimized()}>Usar PDF optimizado</Button>
+              <Button onClick={() => void openOptimized()}>Usar PDF optimizado</Button>
             </>
           ) : showLevels ? (
             <>
@@ -239,18 +239,10 @@ export function LargePdfDialog() {
               >
                 Cancelar
               </Button>
-              <Button
-                variant="outline"
-                disabled={running}
-                onClick={() => void useOriginal()}
-              >
+              <Button variant="outline" disabled={running} onClick={() => void openOriginal()}>
                 Trabajar con el original
               </Button>
-              <Button
-                variant="outline"
-                disabled={running}
-                onClick={() => setShowLevels(true)}
-              >
+              <Button variant="outline" disabled={running} onClick={() => setShowLevels(true)}>
                 Elegir nivel
               </Button>
               <Button

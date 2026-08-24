@@ -1,13 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  ArrowUpRight,
-  Eraser,
-  Loader2,
-  Quote,
-  Send,
-  Sparkles,
-} from "lucide-react";
+import { ArrowUpRight, Eraser, Loader2, Quote, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";

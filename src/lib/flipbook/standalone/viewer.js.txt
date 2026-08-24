@@ -329,6 +329,26 @@ function wireControls() {
     if (event.key === "ArrowLeft") goTo(state.page - 1);
   });
 
+  let edgeDrag = null;
+  let suppressEdgeClick = false;
+  el("book").addEventListener("pointerdown", (event) => {
+    const target = event.target.closest ? event.target.closest('[data-fb-action="turn"]') : null;
+    if (!target) return;
+    event.preventDefault();
+    edgeDrag = { x: event.clientX, target };
+    if (target.setPointerCapture) target.setPointerCapture(event.pointerId);
+    target.style.cursor = "grabbing";
+  }, true);
+  el("book").addEventListener("pointerup", (event) => {
+    if (!edgeDrag) return;
+    edgeDrag.target.style.cursor = "grab";
+    if (Math.abs(event.clientX - edgeDrag.x) >= 14) {
+      suppressEdgeClick = true;
+      goTo(state.page + Number(edgeDrag.target.dataset.fbDelta || 0));
+    }
+    edgeDrag = null;
+  }, true);
+
   el("book").addEventListener(
     "click",
     (event) => {
@@ -336,6 +356,10 @@ function wireControls() {
       if (!target) return;
       event.preventDefault();
       event.stopPropagation();
+      if (suppressEdgeClick) {
+        suppressEdgeClick = false;
+        return;
+      }
       if (target.dataset.fbAction === "page") {
         goTo(Number(target.dataset.fbPage));
         return;

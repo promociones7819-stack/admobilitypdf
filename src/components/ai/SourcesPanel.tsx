@@ -41,9 +41,7 @@ export function SourcesPanel() {
         )}
       >
         <Upload className="mx-auto size-5 text-muted-foreground" />
-        <p className="mt-2 text-xs text-muted-foreground">
-          Arrastra PDF, TXT o Markdown aquí
-        </p>
+        <p className="mt-2 text-xs text-muted-foreground">Arrastra PDF, TXT o Markdown aquí</p>
         <Button
           size="sm"
           variant="secondary"
@@ -108,8 +106,11 @@ export function SourcesPanel() {
               <button
                 type="button"
                 aria-label={`Eliminar ${source.name}`}
-                onClick={() => void removeSource(source.id)}
-                className="opacity-0 transition-opacity group-hover:opacity-100"
+                onClick={() => {
+                  if (!window.confirm(`¿Eliminar la fuente «${source.name}» del cuaderno?`)) return;
+                  void removeSource(source.id);
+                }}
+                className="rounded p-1 opacity-70 transition-opacity hover:opacity-100 focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
               >
                 <Trash2 className="size-3.5 text-muted-foreground hover:text-destructive" />
               </button>
