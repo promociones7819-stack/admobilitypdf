@@ -22,20 +22,6 @@ export interface DecorationOptions {
   cleanMetadata?: boolean;
 }
 
-export type FormFieldKind = "text" | "multiline" | "checkbox" | "dropdown";
-
-export interface FormFieldSpec {
-  name: string;
-  label: string;
-  kind: FormFieldKind;
-  page: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  options?: string[];
-}
-
 function safeText(value: string, max = 500): string {
   return value
     .replace(/[\r\n\t]+/g, " ")
@@ -115,59 +101,6 @@ export async function decoratePdf(
     doc.setProducer("PDF Maestro");
   }
   return doc.save({ useObjectStreams: true, addDefaultPage: false });
-}
-
-export async function addPdfFormFields(
-  bytes: Uint8Array,
-  fields: FormFieldSpec[],
-): Promise<Uint8Array> {
-  const doc = await PDFDocument.load(bytes.slice(0), {
-    ignoreEncryption: true,
-    throwOnInvalidObject: false,
-  });
-  const form = doc.getForm();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const pages = doc.getPages();
-  for (const [index, spec] of fields.entries()) {
-    const page = pages[Math.min(Math.max(1, spec.page), pages.length) - 1];
-    if (!page) continue;
-    const name = (spec.name || `campo_${index + 1}`).replace(/[^\w.-]+/g, "_");
-    const options = {
-      x: Math.max(0, spec.x),
-      y: Math.max(0, spec.y),
-      width: Math.max(12, spec.width),
-      height: Math.max(12, spec.height),
-      borderWidth: 1,
-      borderColor: rgb(0.25, 0.35, 0.55),
-      backgroundColor: rgb(0.97, 0.98, 1),
-      textColor: rgb(0.08, 0.12, 0.2),
-      font,
-    };
-    if (spec.kind === "checkbox") {
-      form.createCheckBox(name).addToPage(page, options);
-    } else if (spec.kind === "dropdown") {
-      const dropdown = form.createDropdown(name);
-      const items = (spec.options ?? []).map(safeText).filter(Boolean);
-      if (items.length) dropdown.addOptions(items);
-      dropdown.addToPage(page, options);
-    } else {
-      const field = form.createTextField(name);
-      if (spec.kind === "multiline") field.enableMultiline();
-      field.setFontSize(10);
-      field.addToPage(page, options);
-    }
-    if (spec.label) {
-      page.drawText(safeText(spec.label, 100), {
-        x: Math.max(0, spec.x),
-        y: Math.max(0, spec.y + spec.height + 3),
-        size: 8,
-        font,
-        color: rgb(0.2, 0.2, 0.2),
-      });
-    }
-  }
-  form.updateFieldAppearances(font);
-  return doc.save({ useObjectStreams: true });
 }
 
 export interface PdfTextPage {

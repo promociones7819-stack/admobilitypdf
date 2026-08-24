@@ -16,8 +16,9 @@ clic, sin servidor ni instalación.
 - Compresión antes y después de editar, combinación, división, extracción y conversión de JPG,
   HEIC, Word, PowerPoint y Excel a PDF.
 - OCR por rangos y en siete idiomas, con orientación automática y capa de texto posicionada.
-- Formularios PDF rellenables, marcas de agua, cabeceras, pies, numeración Bates, QR y limpieza de
-  metadatos.
+- Constructor local de cuestionarios con preguntas y opciones ordenables, importación desde PDF,
+  soluciones, copias editables y exportación como formulario PDF rellenable.
+- Marcas de agua, cabeceras, pies, numeración Bates, QR y limpieza de metadatos.
 - Comparación de dos PDF por texto y por imagen, procesamiento por lotes y auditoría de estructura,
   accesibilidad y señales PDF/A.
 - Protección AES-256 con permisos y firma digital mediante certificado P12/PFX; los certificados y

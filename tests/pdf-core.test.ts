@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { PDFDocument } from "pdf-lib";
 import { normalizeRotation } from "../src/lib/pdf/types.ts";
 import { pageChunks, parsePageGroups, parsePageRange } from "../src/lib/pdf/ranges.ts";
 import { normalizeConfig, safeExternalUrl, safeMediaSource } from "../src/lib/flipbook/hotspots.ts";
+import { buildQuestionnairePdf, parseQuestionnaireText } from "../src/lib/pdf/questionnaire.ts";
 
 test("interpreta rangos de páginas y elimina duplicados", () => {
   assert.deepEqual(parsePageRange("1-3, 3, 6, 8-7", 8), [0, 1, 2, 5, 7, 6]);
@@ -64,4 +66,21 @@ test("conserva multimedia y estilos seguros del flipbook", () => {
   assert.equal(result.theme?.background, undefined);
   assert.equal(result.theme?.accent, "#0f766e");
   assert.equal(result.hotspots[0]?.style?.animation, "pulse");
+});
+
+test("detecta cuestionarios y crea campos PDF rellenables", async () => {
+  const questions = parseQuestionnaireText(
+    "1. Capital de Francia A) *París B) Roma 2. Dos más dos A) Tres B) *Cuatro",
+  );
+  assert.equal(questions.length, 2);
+  assert.equal(questions[0]?.answers[0]?.isCorrect, true);
+  const bytes = await buildQuestionnairePdf({
+    version: 1,
+    title: "Prueba",
+    description: "Selecciona una respuesta.",
+    questions,
+  });
+  const pdf = await PDFDocument.load(bytes);
+  assert.equal(pdf.getForm().getFields().length, 2);
+  assert.equal(pdf.getPageCount(), 1);
 });

@@ -6,13 +6,11 @@ import {
   FileDiff,
   Files,
   Loader2,
-  Plus,
   ShieldCheck,
   LockKeyhole,
   PenTool,
   Stamp,
   QrCode,
-  Trash2,
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -25,18 +23,16 @@ import { Progress } from "@/components/ui/progress";
 import { saveBlob } from "@/lib/download";
 import { optimizePdf } from "@/lib/pdf/optimize";
 import {
-  addPdfFormFields,
   addQrCodeToPdf,
   comparePdfText,
   comparePdfVisual,
   decoratePdf,
   inspectPdf,
   type ComparisonPage,
-  type FormFieldKind,
-  type FormFieldSpec,
   type VisualComparisonPage,
 } from "@/lib/pdf/pro";
 import { cleanPdfMetadata, signPdfWithP12 } from "@/lib/pdf/security";
+import { QuestionnaireBuilder } from "./QuestionnaireBuilder";
 
 type CreatedHandler = (file: File) => Promise<void> | void;
 
@@ -115,8 +111,6 @@ export function ProfessionalToolsWorkspace({ onPdfCreated }: { onPdfCreated?: Cr
   const [numbering, setNumbering] = useState(true);
   const [batesPrefix, setBatesPrefix] = useState("");
   const [clean, setClean] = useState(true);
-  const [formFile, setFormFile] = useState<File | null>(null);
-  const [fields, setFields] = useState<FormFieldSpec[]>([]);
   const [left, setLeft] = useState<File | null>(null);
   const [right, setRight] = useState<File | null>(null);
   const [comparison, setComparison] = useState<ComparisonPage[]>([]);
@@ -169,42 +163,6 @@ export function ProfessionalToolsWorkspace({ onPdfCreated }: { onPdfCreated?: Cr
     } catch (error) {
       console.error(error);
       toast.error("No se ha podido preparar el PDF.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function addField(kind: FormFieldKind) {
-    const index = fields.length + 1;
-    setFields((items) => [
-      ...items,
-      {
-        name: `campo_${index}`,
-        label: kind === "checkbox" ? `Opción ${index}` : `Campo ${index}`,
-        kind,
-        page: 1,
-        x: 72,
-        y: Math.max(80, 680 - items.length * 70),
-        width: kind === "checkbox" ? 18 : 220,
-        height: kind === "multiline" ? 60 : kind === "checkbox" ? 18 : 26,
-        ...(kind === "dropdown" ? { options: ["Opción 1", "Opción 2"] } : {}),
-      },
-    ]);
-  }
-
-  async function buildForm() {
-    if (!formFile || !fields.length) {
-      toast.error("Selecciona un PDF y añade campos.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const bytes = await addPdfFormFields(new Uint8Array(await formFile.arrayBuffer()), fields);
-      await outputFile(bytes, formFile.name.replace(/\.pdf$/i, "-formulario.pdf"), onPdfCreated);
-      toast.success("Formulario PDF creado");
-    } catch (error) {
-      console.error(error);
-      toast.error("No se ha podido crear el formulario.");
     } finally {
       setBusy(false);
     }
@@ -469,97 +427,7 @@ export function ProfessionalToolsWorkspace({ onPdfCreated }: { onPdfCreated?: Cr
           </TabsContent>
 
           <TabsContent value="forms">
-            <Panel
-              title="Constructor de formularios"
-              description="Crea campos PDF nativos que se pueden rellenar en Acrobat, Vista Previa y navegadores compatibles."
-            >
-              <FilePicker file={formFile} onFile={setFormFile} />
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => addField("text")}>
-                  <Plus className="mr-1 size-4" />
-                  Texto
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => addField("multiline")}>
-                  <Plus className="mr-1 size-4" />
-                  Texto largo
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => addField("checkbox")}>
-                  <Plus className="mr-1 size-4" />
-                  Casilla
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => addField("dropdown")}>
-                  <Plus className="mr-1 size-4" />
-                  Desplegable
-                </Button>
-              </div>
-              <div className="space-y-3">
-                {fields.map((field, index) => (
-                  <div
-                    key={`${field.name}-${index}`}
-                    className="grid gap-2 rounded-xl border p-3 sm:grid-cols-[1.4fr_90px_80px_80px_80px_80px_auto]"
-                  >
-                    <Input
-                      value={field.label}
-                      aria-label="Etiqueta"
-                      onChange={(e) =>
-                        setFields((items) =>
-                          items.map((item, i) =>
-                            i === index
-                              ? {
-                                  ...item,
-                                  label: e.target.value,
-                                  name: `campo_${index + 1}_${e.target.value}`,
-                                }
-                              : item,
-                          ),
-                        )
-                      }
-                    />
-                    <Input
-                      type="number"
-                      value={field.page}
-                      aria-label="Página"
-                      onChange={(e) =>
-                        setFields((items) =>
-                          items.map((item, i) =>
-                            i === index ? { ...item, page: Number(e.target.value) || 1 } : item,
-                          ),
-                        )
-                      }
-                    />
-                    {(["x", "y", "width", "height"] as const).map((key) => (
-                      <Input
-                        key={key}
-                        type="number"
-                        value={field[key]}
-                        aria-label={key}
-                        onChange={(e) =>
-                          setFields((items) =>
-                            items.map((item, i) =>
-                              i === index ? { ...item, [key]: Number(e.target.value) || 0 } : item,
-                            ),
-                          )
-                        }
-                      />
-                    ))}
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label="Eliminar campo"
-                      onClick={() => setFields((items) => items.filter((_, i) => i !== index))}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-              <Button
-                onClick={() => void buildForm()}
-                disabled={busy || !formFile || !fields.length}
-              >
-                Crear formulario PDF
-              </Button>
-            </Panel>
+            <QuestionnaireBuilder onPdfCreated={onPdfCreated} />
           </TabsContent>
 
           <TabsContent value="compare">
