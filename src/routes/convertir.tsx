@@ -35,12 +35,14 @@ function ConverterCard({
   description,
   accept,
   hint,
+  tone,
 }: {
   mode: Mode;
   title: string;
   description: string;
   accept: string;
   hint: string;
+  tone: "coral" | "lilac";
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -87,29 +89,40 @@ function ConverterCard({
         setDragging(false);
         void run(e.dataTransfer.files[0]);
       }}
-      className={`flex flex-col rounded-2xl border-2 border-dashed bg-card p-8 text-center transition-colors ${
-        dragging ? "border-primary bg-primary/5" : "border-border"
-      }`}
+      className={`card-soft flex flex-col rounded-[28px] p-8 text-center transition-transform ${
+        tone === "coral"
+          ? "bg-coral text-coral-foreground"
+          : "bg-lilac text-lilac-foreground"
+      } ${dragging ? "scale-[1.02]" : ""}`}
     >
-      <div className="mx-auto inline-flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-        {mode === "docx2pdf" ? <FileType2 className="size-5" /> : <FileDown className="size-5" />}
+      <div className="mx-auto inline-flex size-14 items-center justify-center rounded-2xl bg-card/70">
+        {mode === "docx2pdf" ? <FileType2 className="size-7" /> : <FileDown className="size-7" />}
       </div>
-      <h2 className="mt-4 text-lg font-semibold tracking-tight">{title}</h2>
-      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+      <h2 className="mt-4 text-xl font-extrabold tracking-tight">{title}</h2>
+      <p className="mt-2 text-sm opacity-85">{description}</p>
 
       <div className="mt-6 flex flex-1 flex-col items-center justify-end gap-3">
         {busy ? (
-          <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="inline-flex items-center gap-2 text-sm opacity-80">
             <Loader2 className="size-4 animate-spin" />
             Convirtiendo{progress ? ` ${Math.round(progress * 100)}%` : ""}…
           </span>
         ) : (
           <>
-            <UploadCloud className="size-6 text-muted-foreground" />
-            <Button onClick={() => inputRef.current?.click()}>Elegir archivo</Button>
+            <UploadCloud className="size-7 opacity-80" />
+            <Button
+              className={`rounded-full font-bold ${
+                tone === "coral"
+                  ? "bg-amber-soft text-amber-soft-foreground hover:bg-amber-soft/85"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90"
+              }`}
+              onClick={() => inputRef.current?.click()}
+            >
+              Elegir archivo
+            </Button>
           </>
         )}
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p className="text-xs opacity-75">{hint}</p>
       </div>
 
       <input
@@ -129,15 +142,15 @@ function ConverterCard({
 
 function ConvertRoute() {
   return (
-    <main className="min-h-screen bg-canvas px-6 py-12">
+    <main className="pastel-canvas min-h-screen px-6 py-12">
       <div className="mx-auto w-full max-w-4xl">
-        <Button asChild variant="ghost" size="sm" className="mb-6">
+        <Button asChild variant="ghost" size="sm" className="mb-6 rounded-full">
           <Link to="/">
             <ArrowLeft className="mr-2 size-4" /> Volver al editor
           </Link>
         </Button>
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Conversor Word ⇄ PDF</h1>
-        <p className="mt-3 max-w-2xl text-muted-foreground">
+        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">Conversor Word ⇄ PDF</h1>
+        <p className="mt-3 max-w-2xl text-base text-muted-foreground sm:text-lg">
           Convierte documentos en tu propio dispositivo: arrastra el archivo o elígelo y la
           descarga empieza al terminar.
         </p>
@@ -149,6 +162,7 @@ function ConvertRoute() {
             description="Convierte un .docx en un PDF listo para imprimir o editar en el editor."
             accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             hint="Conserva títulos, listas y párrafos. Formato .doc antiguo no soportado."
+            tone="coral"
           />
           <ConverterCard
             mode="pdf2docx"
@@ -156,6 +170,7 @@ function ConvertRoute() {
             description="Extrae el texto del PDF y genera un .docx editable con una sección por página."
             accept=".pdf,application/pdf"
             hint="Requiere PDFs con texto (no escaneados como imagen)."
+            tone="lilac"
           />
         </div>
 

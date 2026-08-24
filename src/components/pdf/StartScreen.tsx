@@ -38,15 +38,15 @@ export function StartScreen() {
 
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-canvas px-6 py-16">
+    <main className="pastel-canvas flex min-h-screen flex-col items-center justify-center px-6 py-16">
       <div className="w-full max-w-xl text-center">
-        <div className="mx-auto mb-6 inline-flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-          <Layers className="size-6" />
+        <div className="mx-auto mb-6 inline-flex size-14 items-center justify-center rounded-3xl bg-coral text-coral-foreground card-soft">
+          <Layers className="size-7" />
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+        <h1 className="text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
           Editor PDF
         </h1>
-        <p className="mt-3 text-base text-muted-foreground">
+        <p className="mt-3 text-base text-muted-foreground sm:text-lg">
           Edita, organiza y anota tus PDFs
         </p>
 
@@ -61,7 +61,7 @@ export function StartScreen() {
             setDragging(false);
             void handle(e.dataTransfer.files);
           }}
-          className={`mt-10 rounded-2xl border-2 border-dashed bg-card px-6 py-12 transition-colors ${
+          className={`card-soft mt-10 rounded-3xl border-2 border-dashed bg-card/80 px-6 py-12 backdrop-blur transition-colors ${
             dragging ? "border-primary bg-primary/5" : "border-border"
           }`}
         >
@@ -77,11 +77,19 @@ export function StartScreen() {
                 Arrastra un PDF aquí o elige una opción
               </p>
               <div className="mt-6 flex flex-wrap justify-center gap-3">
-                <Button size="lg" onClick={() => singleRef.current?.click()}>
+                <Button
+                  size="lg"
+                  className="rounded-full bg-amber-soft font-bold text-amber-soft-foreground hover:bg-amber-soft/85"
+                  onClick={() => singleRef.current?.click()}
+                >
                   <FilePlus2 className="mr-2 size-4" />
                   Abrir PDF
                 </Button>
-                <Button size="lg" variant="outline" onClick={() => multiRef.current?.click()}>
+                <Button
+                  size="lg"
+                  className="rounded-full bg-lilac font-bold text-lilac-foreground hover:bg-lilac/85"
+                  onClick={() => multiRef.current?.click()}
+                >
                   <Layers className="mr-2 size-4" />
                   Combinar PDFs
                 </Button>

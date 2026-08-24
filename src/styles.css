@@ -106,6 +106,14 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-coral: var(--coral);
+  --color-coral-foreground: var(--coral-foreground);
+  --color-lilac: var(--lilac);
+  --color-lilac-foreground: var(--lilac-foreground);
+  --color-amber-soft: var(--amber);
+  --color-amber-soft-foreground: var(--amber-foreground);
+  --color-mint: var(--mint);
+  --color-mint-foreground: var(--mint-foreground);
 }
 
 :root {
@@ -210,6 +218,22 @@
   box-shadow:
     0 1px 2px oklch(0 0 0 / 8%),
     0 12px 32px oklch(0 0 0 / 10%);
+}
+
+/* Playful pastel backdrop: warm peach → pink → lilac, like the brand mockups. */
+@utility pastel-canvas {
+  background-color: oklch(0.97 0.02 45);
+  background-image:
+    radial-gradient(60% 55% at 8% 4%, oklch(0.94 0.06 55 / 90%), transparent 70%),
+    radial-gradient(55% 50% at 92% 8%, oklch(0.92 0.05 350 / 85%), transparent 70%),
+    radial-gradient(70% 60% at 88% 92%, oklch(0.9 0.06 300 / 85%), transparent 72%),
+    radial-gradient(65% 60% at 12% 96%, oklch(0.94 0.05 90 / 80%), transparent 72%);
+}
+
+@utility card-soft {
+  box-shadow:
+    0 1px 0 oklch(1 0 0 / 60%) inset,
+    0 18px 40px -24px oklch(0.4 0.08 32 / 45%);
 }
 
 @layer base {
