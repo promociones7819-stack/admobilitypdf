@@ -89,29 +89,40 @@ function ConverterCard({
         setDragging(false);
         void run(e.dataTransfer.files[0]);
       }}
-      className={`flex flex-col rounded-2xl border-2 border-dashed bg-card p-8 text-center transition-colors ${
-        dragging ? "border-primary bg-primary/5" : "border-border"
-      }`}
+      className={`card-soft flex flex-col rounded-[28px] p-8 text-center transition-transform ${
+        tone === "coral"
+          ? "bg-coral text-coral-foreground"
+          : "bg-lilac text-lilac-foreground"
+      } ${dragging ? "scale-[1.02]" : ""}`}
     >
-      <div className="mx-auto inline-flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-        {mode === "docx2pdf" ? <FileType2 className="size-5" /> : <FileDown className="size-5" />}
+      <div className="mx-auto inline-flex size-14 items-center justify-center rounded-2xl bg-card/70">
+        {mode === "docx2pdf" ? <FileType2 className="size-7" /> : <FileDown className="size-7" />}
       </div>
-      <h2 className="mt-4 text-lg font-semibold tracking-tight">{title}</h2>
-      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+      <h2 className="mt-4 text-xl font-extrabold tracking-tight">{title}</h2>
+      <p className="mt-2 text-sm opacity-85">{description}</p>
 
       <div className="mt-6 flex flex-1 flex-col items-center justify-end gap-3">
         {busy ? (
-          <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="inline-flex items-center gap-2 text-sm opacity-80">
             <Loader2 className="size-4 animate-spin" />
             Convirtiendo{progress ? ` ${Math.round(progress * 100)}%` : ""}…
           </span>
         ) : (
           <>
-            <UploadCloud className="size-6 text-muted-foreground" />
-            <Button onClick={() => inputRef.current?.click()}>Elegir archivo</Button>
+            <UploadCloud className="size-7 opacity-80" />
+            <Button
+              className={`rounded-full font-bold ${
+                tone === "coral"
+                  ? "bg-amber-soft text-amber-soft-foreground hover:bg-amber-soft/85"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90"
+              }`}
+              onClick={() => inputRef.current?.click()}
+            >
+              Elegir archivo
+            </Button>
           </>
         )}
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p className="text-xs opacity-75">{hint}</p>
       </div>
 
       <input
