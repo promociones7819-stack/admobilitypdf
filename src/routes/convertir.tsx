@@ -142,15 +142,15 @@ function ConverterCard({
 
 function ConvertRoute() {
   return (
-    <main className="min-h-screen bg-canvas px-6 py-12">
+    <main className="pastel-canvas min-h-screen px-6 py-12">
       <div className="mx-auto w-full max-w-4xl">
-        <Button asChild variant="ghost" size="sm" className="mb-6">
+        <Button asChild variant="ghost" size="sm" className="mb-6 rounded-full">
           <Link to="/">
             <ArrowLeft className="mr-2 size-4" /> Volver al editor
           </Link>
         </Button>
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Conversor Word ⇄ PDF</h1>
-        <p className="mt-3 max-w-2xl text-muted-foreground">
+        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">Conversor Word ⇄ PDF</h1>
+        <p className="mt-3 max-w-2xl text-base text-muted-foreground sm:text-lg">
           Convierte documentos en tu propio dispositivo: arrastra el archivo o elígelo y la
           descarga empieza al terminar.
         </p>
