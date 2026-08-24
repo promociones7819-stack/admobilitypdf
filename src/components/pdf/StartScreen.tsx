@@ -38,15 +38,15 @@ export function StartScreen() {
 
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-canvas px-6 py-16">
+    <main className="pastel-canvas flex min-h-screen flex-col items-center justify-center px-6 py-16">
       <div className="w-full max-w-xl text-center">
-        <div className="mx-auto mb-6 inline-flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-          <Layers className="size-6" />
+        <div className="mx-auto mb-6 inline-flex size-14 items-center justify-center rounded-3xl bg-coral text-coral-foreground card-soft">
+          <Layers className="size-7" />
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+        <h1 className="text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
           Editor PDF
         </h1>
-        <p className="mt-3 text-base text-muted-foreground">
+        <p className="mt-3 text-base text-muted-foreground sm:text-lg">
           Edita, organiza y anota tus PDFs
         </p>
 
