@@ -184,8 +184,11 @@ interface EditorContextValue {
   undo: () => void;
   redo: () => void;
   download: () => Promise<void>;
+  /** Genera un File con el PDF actual (páginas + anotaciones) sin descargarlo. */
+  exportFile: () => Promise<File>;
   extractPages: (ids: string[]) => Promise<void>;
   markSaved: () => void;
+
 }
 
 const EditorContext = createContext<EditorContextValue | null>(null);
