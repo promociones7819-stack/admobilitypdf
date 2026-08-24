@@ -61,7 +61,7 @@ export function StartScreen() {
             setDragging(false);
             void handle(e.dataTransfer.files);
           }}
-          className={`mt-10 rounded-2xl border-2 border-dashed bg-card px-6 py-12 transition-colors ${
+          className={`card-soft mt-10 rounded-3xl border-2 border-dashed bg-card/80 px-6 py-12 backdrop-blur transition-colors ${
             dragging ? "border-primary bg-primary/5" : "border-border"
           }`}
         >
