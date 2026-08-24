@@ -162,6 +162,7 @@ function ConvertRoute() {
             description="Convierte un .docx en un PDF listo para imprimir o editar en el editor."
             accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             hint="Conserva títulos, listas y párrafos. Formato .doc antiguo no soportado."
+            tone="coral"
           />
           <ConverterCard
             mode="pdf2docx"
@@ -169,6 +170,7 @@ function ConvertRoute() {
             description="Extrae el texto del PDF y genera un .docx editable con una sección por página."
             accept=".pdf,application/pdf"
             hint="Requiere PDFs con texto (no escaneados como imagen)."
+            tone="lilac"
           />
         </div>
 
