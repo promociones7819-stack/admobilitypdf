@@ -1,0 +1,29 @@
+PDF MAESTRO — APLICACIÓN LOCAL
+================================
+
+macOS
+1. Haz doble clic en «iniciar-app-local.command».
+2. Si macOS lo bloquea la primera vez: clic derecho > Abrir.
+
+Windows
+1. Haz doble clic en «iniciar-app-local.bat».
+
+La aplicación se abre como HTML en http://127.0.0.1:4173 y procesa los PDF
+localmente. Mantén abierta la ventana de inicio mientras trabajas.
+
+CARPETAS POR PROYECTO
+1. Pulsa «Asignar carpeta» en la franja superior.
+2. Elige la carpeta que corresponda al proyecto.
+3. Autoriza el acceso cuando lo pida el navegador.
+
+PDF Maestro organiza automáticamente las salidas en estas subcarpetas:
+- PDF
+- Flipbooks
+- Configuracion
+- Archivos
+
+Para escritura directa en carpetas usa Google Chrome o Microsoft Edge.
+Si el navegador no ofrece esa función, la aplicación conserva la descarga
+normal como alternativa.
+
+Todo permanece en tu ordenador. No es necesario publicar ni subir archivos.

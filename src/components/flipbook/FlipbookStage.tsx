@@ -1,6 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import type { FlipbookPage } from "@/lib/flipbook/document";
-import { resolveTargetPage, type Hotspot } from "@/lib/flipbook/hotspots";
+import { buttonPresetGlyph, resolveTargetPage, type Hotspot } from "@/lib/flipbook/hotspots";
 
 export interface FlipbookHandle {
   /** Navega a una página (1-based) usando la API de StPageFlip, sin recargar el PDF. */
@@ -72,6 +72,12 @@ function buildPageElement(
       (hotspot.height / page.height) * 100
     }%;cursor:pointer;`;
     el.title = hotspot.label ?? "";
+    if (hotspot.buttonPreset) {
+      el.className = `flipbook-3d-button${hotspot.buttonPreset.startsWith("arrow-") ? " flipbook-3d-arrow" : ""}`;
+      el.style.borderRadius = hotspot.buttonPreset === "circle" ? "999px" : "14px";
+      el.textContent = buttonPresetGlyph(hotspot.buttonPreset);
+      el.setAttribute("aria-label", hotspot.label || "Abrir hipervínculo");
+    }
     if (target) {
       el.href = `#page=${target}`;
       el.dataset["fbAction"] = "page";
@@ -86,6 +92,19 @@ function buildPageElement(
   }
 
   wrapper.appendChild(overlay);
+
+  // El punto de agarre está en el centro del canto exterior, como en un libro real.
+  const edge = document.createElement("button");
+  const isLeftPage = page.number % 2 === 0;
+  edge.type = "button";
+  edge.dataset["fbAction"] = "turn";
+  edge.dataset["fbDelta"] = isLeftPage ? "-1" : "1";
+  edge.setAttribute("aria-label", isLeftPage ? "Pasar a la página anterior" : "Pasar a la página siguiente");
+  edge.title = "Arrastra o pulsa para pasar la hoja";
+  edge.style.cssText = `position:absolute;z-index:20;top:50%;${isLeftPage ? "left:0" : "right:0"};width:28px;height:88px;transform:translateY(-50%);border:0;cursor:grab;background:linear-gradient(${isLeftPage ? "90deg" : "270deg"},rgba(15,23,42,.22),transparent);opacity:.55;transition:opacity .2s;`;
+  edge.addEventListener("mouseenter", () => (edge.style.opacity = "1"));
+  edge.addEventListener("mouseleave", () => (edge.style.opacity = ".55"));
+  wrapper.appendChild(edge);
   return wrapper;
 }
 
@@ -182,7 +201,7 @@ export function FlipbookStage({
           drawShadow: true,
           maxShadowOpacity: 0.4,
           flippingTime: 500,
-          useMouseEvents: true,
+          useMouseEvents: false,
           swipeDistance: 30,
           mobileScrollSupport: false,
         });
@@ -229,6 +248,16 @@ export function FlipbookStage({
           flipRef.current.flip(Math.min(Math.max(page, 1), pages.length) - 1);
           pageRef.current = page;
           onPageChange(page);
+        }
+        return;
+      }
+      if (target.dataset["fbAction"] === "turn") {
+        const delta = Number(target.dataset["fbDelta"] ?? 0);
+        const next = Math.min(Math.max(pageRef.current + delta, 1), pages.length);
+        if (next !== pageRef.current && flipRef.current) {
+          flipRef.current.flip(next - 1);
+          pageRef.current = next;
+          onPageChange(next);
         }
         return;
       }

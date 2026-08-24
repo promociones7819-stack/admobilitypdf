@@ -184,11 +184,9 @@ interface EditorContextValue {
   undo: () => void;
   redo: () => void;
   download: () => Promise<void>;
-  /** Genera un File con el PDF actual (páginas + anotaciones) sin descargarlo. */
   exportFile: () => Promise<File>;
   extractPages: (ids: string[]) => Promise<void>;
   markSaved: () => void;
-
 }
 
 const EditorContext = createContext<EditorContextValue | null>(null);
@@ -551,6 +549,23 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     }
   }, [annotations, coverExport, fileName, historyIndex, images, pages, sources]);
 
+  const exportFile = useCallback(async () => {
+    setBusy(true);
+    try {
+      const bytes = await buildPdf(pages, sources, {
+        annotations,
+        images,
+        coverMode: coverExport,
+      });
+      const name = editedFileName(fileName);
+      return new File([bytes.slice(0) as unknown as BlobPart], name, {
+        type: "application/pdf",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }, [annotations, coverExport, fileName, images, pages, sources]);
+
   const extractPages = useCallback(
     async (ids: string[]) => {
       setBusy(true);
@@ -639,6 +654,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       undo,
       redo,
       download,
+      exportFile,
       extractPages,
       markSaved: () => setSavedIndex(historyIndex),
     }),
@@ -658,6 +674,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       deleteAnnotation,
       deletePages,
       download,
+      exportFile,
       duplicatePages,
       extractPages,
       fileName,

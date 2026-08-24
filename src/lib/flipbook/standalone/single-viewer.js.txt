@@ -20,12 +20,23 @@
   }
 
   function place(overlay, node, top, left, width, height) {
-    node.className = "hotspot";
+    node.classList.add("hotspot");
     node.style.top = top + "%";
     node.style.left = left + "%";
     node.style.width = width + "%";
     node.style.height = height + "%";
     overlay.appendChild(node);
+  }
+
+  function decorateButton(node, hotspot) {
+    var preset = hotspot.buttonPreset;
+    if (!preset) return;
+    var glyphs = { circle: "●", square: "■", "arrow-left": "←", "arrow-right": "→", "arrow-up": "↑", "arrow-down": "↓" };
+    node.classList.add("hotspot-3d");
+    if (preset.indexOf("arrow-") === 0) node.classList.add("hotspot-3d-arrow");
+    if (preset === "circle") node.classList.add("hotspot-3d-circle");
+    node.textContent = glyphs[preset] || "●";
+    node.setAttribute("aria-label", hotspot.label || "Abrir hipervínculo");
   }
 
   function buildPageElement(page) {
@@ -74,6 +85,7 @@
         a.rel = "noopener noreferrer";
         a.dataset.fbAction = "url";
       }
+      decorateButton(a, hotspot);
       place(
         overlay,
         a,
@@ -85,6 +97,15 @@
     });
 
     wrapper.appendChild(overlay);
+    var edge = document.createElement("button");
+    var leftPage = page.number % 2 === 0;
+    edge.type = "button";
+    edge.className = "page-edge " + (leftPage ? "left" : "right");
+    edge.dataset.fbAction = "turn";
+    edge.dataset.fbDelta = leftPage ? "-1" : "1";
+    edge.title = "Pasar la hoja desde el borde exterior";
+    edge.setAttribute("aria-label", leftPage ? "Página anterior" : "Página siguiente");
+    wrapper.appendChild(edge);
     return wrapper;
   }
 
@@ -139,7 +160,7 @@
       drawShadow: true,
       maxShadowOpacity: 0.4,
       flippingTime: 500,
-      useMouseEvents: true,
+      useMouseEvents: false,
       swipeDistance: 30,
       mobileScrollSupport: false,
     });
@@ -228,6 +249,10 @@
         event.stopPropagation();
         if (target.dataset.fbAction === "page") {
           goTo(Number(target.dataset.fbPage));
+          return;
+        }
+        if (target.dataset.fbAction === "turn") {
+          goTo(state.page + Number(target.dataset.fbDelta || 0));
           return;
         }
         var href = target.getAttribute("href");

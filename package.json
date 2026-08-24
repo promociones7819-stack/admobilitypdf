@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
+    "local": "vite dev --host 127.0.0.1 --port 4173 --open",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",

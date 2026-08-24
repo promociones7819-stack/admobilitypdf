@@ -43,7 +43,13 @@ function IconAction({
   );
 }
 
-export function TopBar({ onToggleThumbs }: { onToggleThumbs: () => void }) {
+export function TopBar({
+  onToggleThumbs,
+  onOpenFlipbook,
+}: {
+  onToggleThumbs: () => void;
+  onOpenFlipbook?: () => void;
+}) {
   const {
     fileName,
     dirty,
@@ -119,10 +125,13 @@ export function TopBar({ onToggleThumbs }: { onToggleThumbs: () => void }) {
             <FileType2 className="mr-2 size-4" /> Word ⇄ PDF
           </Link>
         </Button>
-        <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
-          <Link to="/flipbook">
-            <BookOpen className="mr-2 size-4" /> Flipbook
-          </Link>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="hidden md:inline-flex"
+          onClick={onOpenFlipbook}
+        >
+          <BookOpen className="mr-2 size-4" /> Crear flipbook
         </Button>
         <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
           <Link to="/ocr">
@@ -148,7 +157,7 @@ export function TopBar({ onToggleThumbs }: { onToggleThumbs: () => void }) {
           disabled={busy}
           onClick={() => {
             void download()
-              .then(() => toast.success("PDF descargado"))
+              .then(() => toast.success("PDF guardado"))
               .catch((error) => toast.error(friendlyError(error)));
           }}
         >
@@ -157,7 +166,7 @@ export function TopBar({ onToggleThumbs }: { onToggleThumbs: () => void }) {
           ) : (
             <Download className="mr-2 size-4" />
           )}
-          Descargar PDF
+          Guardar PDF
         </Button>
       </div>
 

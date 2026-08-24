@@ -10,6 +10,8 @@
  *   3. Apertura del Blob en una pestaña nueva / misma pestaña como último recurso.
  */
 
+import { saveToActiveProject } from "@/lib/projects/storage";
+
 function isAppleMobile(): boolean {
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent;
@@ -59,6 +61,8 @@ function anchorDownload(url: string, fileName: string): boolean {
 /** Guarda un Blob con el nombre indicado, usando la mejor vía del dispositivo. */
 export async function saveBlob(blob: Blob, fileName: string): Promise<void> {
   const type = blob.type || "application/octet-stream";
+
+  if (await saveToActiveProject(blob, fileName)) return;
 
   if (isAppleMobile() && (await shareFile(blob, fileName, type))) return;
 

@@ -84,6 +84,27 @@ body {
 .book { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6); }
 .page-container { position: relative; overflow: hidden; background: #fff; }
 .hotspot { position: absolute; display: block; cursor: pointer; }
+.hotspot-3d {
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: clamp(16px, 3vw, 32px); font-weight: 900; text-decoration: none;
+  border: 1px solid rgba(255,255,255,.55); border-radius: 14px;
+  background: linear-gradient(145deg,#60a5fa 0%,#2563eb 46%,#1e40af 100%);
+  box-shadow: inset 0 2px 1px rgba(255,255,255,.55), inset 0 -4px 5px rgba(15,23,42,.3), 0 5px 0 #172554, 0 8px 14px rgba(15,23,42,.38);
+  text-shadow: 0 2px 2px rgba(15,23,42,.5);
+  transition: filter .15s, transform .15s, box-shadow .15s;
+}
+.hotspot-3d:hover { filter: brightness(1.12); transform: translateY(-1px); }
+.hotspot-3d:active { transform: translateY(4px); box-shadow: inset 0 2px 4px rgba(15,23,42,.35),0 1px 0 #172554; }
+.hotspot-3d-circle { border-radius: 999px; }
+.hotspot-3d-arrow { border-radius: 14px; }
+.page-edge {
+  position: absolute; z-index: 20; top: 50%; width: 28px; height: 88px;
+  transform: translateY(-50%); border: 0; opacity: .55; cursor: grab;
+  transition: opacity .2s;
+}
+.page-edge:hover { opacity: 1; }
+.page-edge.left { left: 0; background: linear-gradient(90deg, rgba(15,23,42,.24), transparent); }
+.page-edge.right { right: 0; background: linear-gradient(270deg, rgba(15,23,42,.24), transparent); }
 .overlay {
   position: fixed;
   inset: 0;

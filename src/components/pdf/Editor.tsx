@@ -12,7 +12,7 @@ import { TopBar } from "./TopBar";
 import { ThumbnailPanel } from "./ThumbnailPanel";
 import { zoomIn, zoomOut, type ZoomMode } from "./zoom";
 
-export function Editor() {
+export function Editor({ onOpenFlipbook }: { onOpenFlipbook?: () => void }) {
   const { pages, activePageId, setActivePage, undo, redo, duplicatePages, selection, setTool } =
     usePdfEditor();
   const [zoom, setZoom] = useState<ZoomMode>("fit-page");
@@ -96,8 +96,8 @@ export function Editor() {
 
   return (
     <TooltipProvider delayDuration={200}>
-    <div className="flex h-screen flex-col bg-canvas">
-      <TopBar onToggleThumbs={() => setThumbsOpen(true)} />
+    <div className="flex h-full flex-col bg-canvas">
+      <TopBar onToggleThumbs={() => setThumbsOpen(true)} onOpenFlipbook={onOpenFlipbook} />
       <div className="flex flex-1 overflow-hidden">
         <aside className="hidden w-56 shrink-0 border-r border-border bg-card lg:block">
           <ThumbnailPanel />
@@ -120,4 +120,3 @@ export function Editor() {
     </TooltipProvider>
   );
 }
-

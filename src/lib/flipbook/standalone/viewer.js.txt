@@ -116,12 +116,23 @@ function buildPageElement(page) {
   overlay.style.cssText = "position:absolute;inset:0;";
 
   const place = (node, top, left, width, height) => {
-    node.className = "hotspot";
+    node.classList.add("hotspot");
     node.style.top = top + "%";
     node.style.left = left + "%";
     node.style.width = width + "%";
     node.style.height = height + "%";
     overlay.appendChild(node);
+  };
+
+  const decorateButton = (node, hotspot) => {
+    const preset = hotspot.buttonPreset;
+    if (!preset) return;
+    const glyphs = { circle: "●", square: "■", "arrow-left": "←", "arrow-right": "→", "arrow-up": "↑", "arrow-down": "↓" };
+    node.classList.add("hotspot-3d");
+    if (preset.indexOf("arrow-") === 0) node.classList.add("hotspot-3d-arrow");
+    if (preset === "circle") node.classList.add("hotspot-3d-circle");
+    node.textContent = glyphs[preset] || "●";
+    node.setAttribute("aria-label", hotspot.label || "Abrir hipervínculo");
   };
 
   for (const link of page.links) {
@@ -154,6 +165,7 @@ function buildPageElement(page) {
       a.rel = "noopener noreferrer";
       a.dataset.fbAction = "url";
     }
+    decorateButton(a, hotspot);
     place(
       a,
       (hotspot.y / page.height) * 100,
@@ -164,6 +176,15 @@ function buildPageElement(page) {
   }
 
   wrapper.appendChild(overlay);
+  const edge = document.createElement("button");
+  const leftPage = page.number % 2 === 0;
+  edge.type = "button";
+  edge.className = "page-edge " + (leftPage ? "left" : "right");
+  edge.dataset.fbAction = "turn";
+  edge.dataset.fbDelta = leftPage ? "-1" : "1";
+  edge.title = "Pasar la hoja desde el borde exterior";
+  edge.setAttribute("aria-label", leftPage ? "Página anterior" : "Página siguiente");
+  wrapper.appendChild(edge);
   return wrapper;
 }
 
@@ -220,7 +241,7 @@ function buildBook() {
     drawShadow: true,
     maxShadowOpacity: 0.4,
     flippingTime: 500,
-    useMouseEvents: true,
+    useMouseEvents: false,
     swipeDistance: 30,
     mobileScrollSupport: false,
   });
@@ -309,6 +330,10 @@ function wireControls() {
       event.stopPropagation();
       if (target.dataset.fbAction === "page") {
         goTo(Number(target.dataset.fbPage));
+        return;
+      }
+      if (target.dataset.fbAction === "turn") {
+        goTo(state.page + Number(target.dataset.fbDelta || 0));
         return;
       }
       const href = target.getAttribute("href");

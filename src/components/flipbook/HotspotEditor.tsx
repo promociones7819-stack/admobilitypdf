@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { FlipbookPage } from "@/lib/flipbook/document";
-import { actionLabel, type Hotspot } from "@/lib/flipbook/hotspots";
+import { actionLabel, buttonPresetGlyph, type Hotspot } from "@/lib/flipbook/hotspots";
 import { cn } from "@/lib/utils";
 
 interface Rect {
@@ -182,8 +182,16 @@ export function HotspotEditor({
                   );
                 }}
                 className={cn(
-                  "absolute touch-none rounded-sm border-2 bg-primary/20",
-                  active ? "border-primary ring-2 ring-primary/40" : "border-primary/60",
+                  "absolute touch-none",
+                  hotspot.buttonPreset
+                    ? "flipbook-3d-button flex items-center justify-center border-0 text-white"
+                    : "rounded-sm border-2 bg-primary/20",
+                  hotspot.buttonPreset?.startsWith("arrow-") && "flipbook-3d-arrow",
+                  hotspot.buttonPreset === "circle" && "rounded-full",
+                  hotspot.buttonPreset === "square" && "rounded-xl",
+                  active
+                    ? "ring-2 ring-primary ring-offset-2"
+                    : !hotspot.buttonPreset && "border-primary/60",
                 )}
                 style={{
                   left: pct(hotspot.x, page.width),
@@ -192,6 +200,11 @@ export function HotspotEditor({
                   height: pct(hotspot.height, page.height),
                 }}
               >
+                {hotspot.buttonPreset && (
+                  <span className="pointer-events-none text-[clamp(16px,3vw,30px)] font-black leading-none drop-shadow-sm">
+                    {buttonPresetGlyph(hotspot.buttonPreset)}
+                  </span>
+                )}
                 <span className="pointer-events-none absolute -top-5 left-0 whitespace-nowrap rounded bg-primary px-1 text-[10px] font-medium text-primary-foreground">
                   {actionLabel(hotspot, menuPage)}
                 </span>

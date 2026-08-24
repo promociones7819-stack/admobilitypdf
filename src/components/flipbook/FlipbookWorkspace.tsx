@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
   BookOpen,
   ChevronLeft,
   ChevronRight,
@@ -12,6 +16,8 @@ import {
   MousePointer2,
   PencilRuler,
   Plus,
+  Circle,
+  Square,
   Trash2,
   Upload,
   Wand2,
@@ -66,6 +72,7 @@ import {
   type FlipbookConfig,
   type Hotspot,
   type HotspotAction,
+  type HotspotButtonPreset,
 } from "@/lib/flipbook/hotspots";
 import { saveBlob } from "@/lib/download";
 import { FlipbookStage, type FlipbookHandle } from "./FlipbookStage";
@@ -83,7 +90,13 @@ interface Geometry {
   height: number;
 }
 
-export function FlipbookWorkspace() {
+export function FlipbookWorkspace({
+  initialFile,
+  embedded = false,
+}: {
+  initialFile?: File | null;
+  embedded?: boolean;
+}) {
   const [doc, setDoc] = useState<FlipbookDocument | null>(null);
   const [docName, setDocName] = useState<string>("");
   const [storageKey, setStorageKey] = useState<string | null>(null);
@@ -104,6 +117,7 @@ export function FlipbookWorkspace() {
   const openRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const flipRef = useRef<FlipbookHandle>(null);
+  const initialFileRef = useRef<File | null>(null);
 
   const pages = doc?.pages ?? [];
   const pageCount = pages.length;
@@ -145,6 +159,12 @@ export function FlipbookWorkspace() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!initialFile || initialFileRef.current === initialFile) return;
+    initialFileRef.current = initialFile;
+    void openFile(initialFile);
+  }, [initialFile, openFile]);
+
   const goToPage = useCallback(
     (target: number) => {
       const next = Math.min(Math.max(target, 1), pageCount || 1);
@@ -165,6 +185,28 @@ export function FlipbookWorkspace() {
       id: makeHotspotId(),
       page,
       ...geometry,
+      action: { type: "page", targetPage: config.menuPage },
+    };
+    setConfig((prev) => ({ ...prev, hotspots: [...prev.hotspots, hotspot] }));
+    setSelectedId(hotspot.id);
+    setAdding(false);
+    setDialog({ id: hotspot.id, kind: "page", targetPage: String(config.menuPage), url: "" });
+  };
+
+  const createPresetButton = (buttonPreset: HotspotButtonPreset) => {
+    if (!currentPage) return;
+    const arrow = buttonPreset.startsWith("arrow-");
+    const width = Math.min(arrow ? 82 : 58, currentPage.width * 0.18);
+    const height = Math.min(arrow ? 52 : 58, currentPage.height * 0.12);
+    const hotspot: Hotspot = {
+      id: makeHotspotId(),
+      page,
+      x: (currentPage.width - width) / 2,
+      y: (currentPage.height - height) / 2,
+      width,
+      height,
+      buttonPreset,
+      label: "Botón interactivo",
       action: { type: "page", targetPage: config.menuPage },
     };
     setConfig((prev) => ({ ...prev, hotspots: [...prev.hotspots, hotspot] }));
@@ -300,7 +342,7 @@ export function FlipbookWorkspace() {
   }
 
   return (
-    <div className="flex h-[calc(100svh-3.5rem)] flex-col">
+    <div className={`flex flex-col ${embedded ? "h-full" : "h-[calc(100svh-3.5rem)]"}`}>
       <div className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2">
         <div className="flex overflow-hidden rounded-md border border-border">
           <Button
@@ -333,6 +375,41 @@ export function FlipbookWorkspace() {
             >
               <Plus className="mr-2 size-4" /> {adding ? "Dibuja el rectángulo" : "Añadir hotspot"}
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Circle className="mr-2 size-4" /> Botones 3D
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-72" align="start">
+                <DropdownMenuLabel>Insertar botón con hipervínculo</DropdownMenuLabel>
+                <div className="grid grid-cols-3 gap-2 p-2">
+                  {([
+                    ["circle", Circle, "Círculo"],
+                    ["square", Square, "Cuadrado"],
+                    ["arrow-left", ArrowLeft, "Flecha izquierda"],
+                    ["arrow-right", ArrowRight, "Flecha derecha"],
+                    ["arrow-up", ArrowUp, "Flecha arriba"],
+                    ["arrow-down", ArrowDown, "Flecha abajo"],
+                  ] as const).map(([preset, Icon, label]) => (
+                    <DropdownMenuItem
+                      key={preset}
+                      title={label}
+                      aria-label={label}
+                      onSelect={() => createPresetButton(preset)}
+                      className="flex h-16 cursor-pointer items-center justify-center p-1 focus:bg-transparent"
+                    >
+                      <span className={`flipbook-3d-button flex h-11 w-14 items-center justify-center text-white ${preset === "circle" ? "w-11 rounded-full" : "rounded-xl"}`}>
+                        <Icon className="size-5" strokeWidth={3} />
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+                </div>
+                <p className="px-3 pb-2 text-xs text-muted-foreground">
+                  Después podrás moverlo, cambiar su tamaño y elegir el destino.
+                </p>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button variant="outline" size="sm" onClick={() => setAutoMenu(true)}>
               <Wand2 className="mr-2 size-4" /> Crear menú automáticamente
             </Button>

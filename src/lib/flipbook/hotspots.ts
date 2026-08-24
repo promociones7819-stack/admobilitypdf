@@ -13,6 +13,14 @@ export type HotspotAction =
   /** Atajo "Volver al menú": resuelve a la página de menú del documento. */
   | { type: "menu" };
 
+export type HotspotButtonPreset =
+  | "circle"
+  | "square"
+  | "arrow-left"
+  | "arrow-right"
+  | "arrow-up"
+  | "arrow-down";
+
 export interface Hotspot {
   id: string;
   /** Página (1-based) en la que vive el hotspot. */
@@ -23,6 +31,8 @@ export interface Hotspot {
   width: number;
   height: number;
   label?: string;
+  /** Apariencia visible opcional. Sin valor, el hotspot es invisible. */
+  buttonPreset?: HotspotButtonPreset;
   action: HotspotAction;
 }
 
@@ -86,6 +96,11 @@ export function normalizeConfig(input: unknown): FlipbookConfig {
       width: Math.max(1, Number(h.width) || 1),
       height: Math.max(1, Number(h.height) || 1),
       ...(typeof h.label === "string" ? { label: h.label } : {}),
+      ...((
+        ["circle", "square", "arrow-left", "arrow-right", "arrow-up", "arrow-down"] as const
+      ).includes(h.buttonPreset as HotspotButtonPreset)
+        ? { buttonPreset: h.buttonPreset as HotspotButtonPreset }
+        : {}),
       action:
         action.type === "url"
           ? { type: "url", url: action.url }
@@ -99,6 +114,15 @@ export function normalizeConfig(input: unknown): FlipbookConfig {
     menuPage: Math.max(1, Math.round(Number(data.menuPage) || 1)),
     hotspots,
   };
+}
+
+export function buttonPresetGlyph(preset: HotspotButtonPreset): string {
+  if (preset === "arrow-left") return "←";
+  if (preset === "arrow-right") return "→";
+  if (preset === "arrow-up") return "↑";
+  if (preset === "arrow-down") return "↓";
+  if (preset === "circle") return "●";
+  return "■";
 }
 
 /** Página destino de un hotspot, o null si abre una URL externa. */
