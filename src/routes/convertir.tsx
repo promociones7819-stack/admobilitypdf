@@ -35,12 +35,14 @@ function ConverterCard({
   description,
   accept,
   hint,
+  tone,
 }: {
   mode: Mode;
   title: string;
   description: string;
   accept: string;
   hint: string;
+  tone: "coral" | "lilac";
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
