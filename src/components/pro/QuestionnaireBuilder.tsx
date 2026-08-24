@@ -5,6 +5,7 @@ import {
   Check,
   Download,
   FileJson,
+  Globe2,
   Loader2,
   Plus,
   Save,
@@ -21,6 +22,7 @@ import { saveBlob } from "@/lib/download";
 import { extractPdfText } from "@/lib/pdf/pro";
 import {
   buildQuestionnairePdf,
+  buildQuestionnaireHtml,
   createQuestion,
   parseQuestionnaireText,
   questionnaireId,
@@ -114,6 +116,7 @@ export function QuestionnaireBuilder({
     }
   });
   const [includeSolutions, setIncludeSolutions] = useState(false);
+  const [autoCorrect, setAutoCorrect] = useState(true);
   const [busy, setBusy] = useState(false);
   const pdfRef = useRef<HTMLInputElement>(null);
   const jsonRef = useRef<HTMLInputElement>(null);
@@ -213,9 +216,16 @@ export function QuestionnaireBuilder({
       toast.error("Cada pregunta necesita al menos dos opciones.");
       return;
     }
+    if (
+      autoCorrect &&
+      document.questions.some((question) => !question.answers.some((answer) => answer.isCorrect))
+    ) {
+      toast.error("Marca una respuesta correcta en cada pregunta.");
+      return;
+    }
     setBusy(true);
     try {
-      const bytes = await buildQuestionnairePdf(document, { includeSolutions });
+      const bytes = await buildQuestionnairePdf(document, { includeSolutions, autoCorrect });
       const file = new File(
         [bytes.slice(0) as unknown as BlobPart],
         `${safeName(document.title)}.pdf`,
@@ -232,6 +242,18 @@ export function QuestionnaireBuilder({
     } finally {
       setBusy(false);
     }
+  };
+
+  const exportHtml = async () => {
+    if (!document.title.trim() || !document.questions.length) {
+      toast.error("Añade un título y al menos una pregunta.");
+      return;
+    }
+    await saveBlob(
+      new Blob([buildQuestionnaireHtml(document)], { type: "text/html;charset=utf-8" }),
+      `${safeName(document.title)}-autocorregible.html`,
+    );
+    toast.success("Formulario HTML autocorregible creado");
   };
 
   return (
@@ -353,22 +375,44 @@ export function QuestionnaireBuilder({
         )}
       </div>
 
-      <div className="sticky bottom-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-background/95 p-4 shadow-lg backdrop-blur">
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox
-            checked={includeSolutions}
-            onCheckedChange={(value) => setIncludeSolutions(value === true)}
-          />
-          Añadir soluciones y explicaciones al final
-        </label>
-        <Button onClick={() => void exportPdf()} disabled={busy || !document.questions.length}>
-          {busy ? (
-            <Loader2 className="mr-2 size-4 animate-spin" />
-          ) : (
-            <Download className="mr-2 size-4" />
+      <div className="sticky bottom-3 flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-background/95 p-4 shadow-lg backdrop-blur">
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <Checkbox
+              checked={autoCorrect}
+              onCheckedChange={(value) => setAutoCorrect(value === true)}
+            />
+            Formulario autocorregible
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={includeSolutions}
+              onCheckedChange={(value) => setIncludeSolutions(value === true)}
+            />
+            Añadir soluciones y explicaciones al final
+          </label>
+          {autoCorrect && (
+            <p className="max-w-xl text-xs text-muted-foreground">
+              El botón de corrección funciona en Adobe Acrobat Reader y otros lectores que permiten
+              JavaScript. Vista Previa de macOS y algunos navegadores pueden bloquearlo.
+            </p>
           )}
-          Crear formulario PDF rellenable
-        </Button>
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          {autoCorrect && (
+            <Button variant="outline" onClick={() => void exportHtml()} disabled={busy}>
+              <Globe2 className="mr-2 size-4" /> HTML autocorregible
+            </Button>
+          )}
+          <Button onClick={() => void exportPdf()} disabled={busy || !document.questions.length}>
+            {busy ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 size-4" />
+            )}
+            Crear formulario PDF rellenable
+          </Button>
+        </div>
       </div>
     </section>
   );

@@ -17,7 +17,8 @@ clic, sin servidor ni instalación.
   HEIC, Word, PowerPoint y Excel a PDF.
 - OCR por rangos y en siete idiomas, con orientación automática y capa de texto posicionada.
 - Constructor local de cuestionarios con preguntas y opciones ordenables, importación desde PDF,
-  soluciones, copias editables y exportación como formulario PDF rellenable.
+  soluciones, copias editables, autocorrección en lectores compatibles y exportación como formulario
+  PDF rellenable o como HTML autocorregible universal.
 - Marcas de agua, cabeceras, pies, numeración Bates, QR y limpieza de metadatos.
 - Comparación de dos PDF por texto y por imagen, procesamiento por lotes y auditoría de estructura,
   accesibilidad y señales PDF/A.

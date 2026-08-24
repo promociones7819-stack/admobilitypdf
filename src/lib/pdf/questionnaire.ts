@@ -1,4 +1,12 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import {
+  PDFDocument,
+  PDFHexString,
+  PDFName,
+  StandardFonts,
+  rgb,
+  type PDFFont,
+  type PDFPage,
+} from "pdf-lib";
 
 export interface QuestionnaireAnswer {
   id: string;
@@ -134,7 +142,7 @@ function drawLines(
 
 export async function buildQuestionnairePdf(
   questionnaire: QuestionnaireDocument,
-  options: { includeSolutions?: boolean } = {},
+  options: { includeSolutions?: boolean; autoCorrect?: boolean } = {},
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const form = doc.getForm();
@@ -144,6 +152,7 @@ export async function buildQuestionnairePdf(
   const height = 841.89;
   const margin = 48;
   const contentWidth = width - margin * 2;
+  const correctValues: Record<string, string> = {};
   let page = doc.addPage([width, height]);
   let y = height - margin;
 
@@ -203,10 +212,13 @@ export async function buildQuestionnairePdf(
     ensureSpace(Math.min(estimated, height - margin * 2));
     y = drawLines(page, statementLines, bold, 12, margin, y);
     y -= 7;
-    const group = form.createRadioGroup(`pregunta_${questionIndex + 1}`);
+    const fieldName = `pregunta_${questionIndex + 1}`;
+    const group = form.createRadioGroup(fieldName);
     answerLines.forEach(({ answer, label, lines }) => {
       if (y - Math.max(22, lines.length * 15) < margin) newPage();
-      group.addOptionToPage(`${label}_${answer.id.slice(-8)}`, page, {
+      const optionValue = `${label}_${answer.id.slice(-8)}`;
+      if (answer.isCorrect) correctValues[fieldName] = optionValue;
+      group.addOptionToPage(optionValue, page, {
         x: margin + 2,
         y: y - 11,
         width: 12,
@@ -221,6 +233,72 @@ export async function buildQuestionnairePdf(
     });
     y -= 12;
   });
+
+  if (options.autoCorrect) {
+    ensureSpace(92);
+    page.drawLine({
+      start: { x: margin, y: y + 5 },
+      end: { x: width - margin, y: y + 5 },
+      thickness: 1,
+      color: rgb(0.82, 0.84, 0.88),
+    });
+    y -= 18;
+    const result = form.createTextField("resultado_autocorreccion");
+    result.enableReadOnly();
+    result.setText("Pulsa “Corregir formulario” para ver tu puntuación.");
+    result.addToPage(page, {
+      x: margin,
+      y: y - 28,
+      width: contentWidth - 154,
+      height: 30,
+      borderWidth: 1,
+      borderColor: rgb(0.75, 0.78, 0.83),
+      backgroundColor: rgb(0.97, 0.98, 1),
+      textColor: rgb(0.12, 0.16, 0.22),
+      font: regular,
+    });
+    result.setFontSize(10);
+    const button = form.createButton("corregir_formulario");
+    button.addToPage("Corregir formulario", page, {
+      x: width - margin - 140,
+      y: y - 28,
+      width: 140,
+      height: 30,
+      borderWidth: 1,
+      borderColor: rgb(0.07, 0.42, 0.34),
+      backgroundColor: rgb(0.08, 0.56, 0.44),
+      textColor: rgb(1, 1, 1),
+      font: bold,
+    });
+    const script = `
+(function () {
+  var correctas = ${JSON.stringify(correctValues)};
+  var total = ${questionnaire.questions.length};
+  var respondidas = 0;
+  var aciertos = 0;
+  for (var nombre in correctas) {
+    var campo = this.getField(nombre);
+    if (campo && campo.value !== "Off") {
+      respondidas += 1;
+      if (campo.value === correctas[nombre]) aciertos += 1;
+    }
+  }
+  var porcentaje = total ? Math.round((aciertos * 100) / total) : 0;
+  var mensaje = "Resultado: " + aciertos + " / " + total + " (" + porcentaje + "%). Respondidas: " + respondidas + ".";
+  var resultado = this.getField("resultado_autocorreccion");
+  if (resultado) resultado.value = mensaje;
+  app.alert({ cMsg: mensaje, cTitle: "Autocorrección", nIcon: 3 });
+}).call(this);`;
+    const action = doc.context.obj({
+      S: PDFName.of("JavaScript"),
+      JS: PDFHexString.fromText(script),
+    });
+    const actionRef = doc.context.register(action);
+    button.acroField.getWidgets().forEach((widget) => {
+      widget.dict.set(PDFName.of("A"), actionRef);
+    });
+    y -= 48;
+  }
 
   if (options.includeSolutions) {
     newPage();
@@ -255,4 +333,56 @@ export async function buildQuestionnairePdf(
   doc.setProducer("PDF Maestro");
   form.updateFieldAppearances(regular);
   return doc.save({ useObjectStreams: false, addDefaultPage: false });
+}
+
+/** Alternativa universal para lectores PDF que bloquean JavaScript (Safari, Chrome y Vista Previa). */
+export function buildQuestionnaireHtml(questionnaire: QuestionnaireDocument): string {
+  const data = JSON.stringify(questionnaire)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+  return `<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Formulario autocorregible — PDF Maestro</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#27221f;background:#fff4ef}*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#fff1e8,#f5edff);min-height:100vh}.shell{width:min(900px,calc(100% - 28px));margin:30px auto 70px}.hero,.question,.result{background:#fffdfb;border:1px solid #eadfd9;border-radius:24px;box-shadow:0 14px 36px #6b4d3b18}.hero{padding:28px;margin-bottom:20px}.brand{color:#de604a;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:12px}.hero h1{margin:8px 0;font-size:clamp(28px,5vw,44px)}.hero p{color:#71655e;white-space:pre-wrap}.question{padding:24px;margin:16px 0}.question h2{font-size:18px;margin:0 0 16px}.option{display:flex;gap:12px;align-items:flex-start;border:1px solid #eadfd9;border-radius:16px;padding:13px;margin:9px 0;cursor:pointer;background:#fff}.option:hover{border-color:#e88270}.option.correct{border-color:#2e9f73;background:#eefbf5}.option.wrong{border-color:#d85858;background:#fff1f1}.explanation{display:none;margin-top:14px;padding:13px;border-radius:14px;background:#f7f3ff;color:#665d72}.question.checked .explanation{display:block}.actions{position:sticky;bottom:14px;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:14px 18px;background:#fffdfbea;border:1px solid #eadfd9;border-radius:18px;backdrop-filter:blur(12px);box-shadow:0 12px 32px #51322526}.actions button{border:0;border-radius:14px;padding:13px 20px;background:#e9644e;color:#fff;font-size:16px;font-weight:750;cursor:pointer}.result{display:none;padding:18px;margin-top:18px;font-size:18px;font-weight:750}.result.show{display:block}@media(max-width:600px){.shell{margin-top:14px}.hero,.question{padding:18px}.actions{align-items:stretch;flex-direction:column}.actions button{width:100%}}
+</style>
+</head>
+<body>
+<main class="shell"><section class="hero"><div class="brand">PDF Maestro</div><h1 id="title"></h1><p id="description"></p></section><div id="questions"></div><section id="result" class="result" role="status"></section><div class="actions"><span id="progress">0 respondidas</span><button id="correct" type="button">Corregir formulario</button></div></main>
+<script id="questionnaire" type="application/json">${data}</script>
+<script>
+(function(){
+  var data=JSON.parse(document.getElementById("questionnaire").textContent);
+  var host=document.getElementById("questions");
+  document.getElementById("title").textContent=data.title||"Formulario";
+  document.getElementById("description").textContent=data.description||"Selecciona una respuesta en cada pregunta.";
+  data.questions.forEach(function(q,qi){
+    var card=document.createElement("section");card.className="question";card.dataset.index=String(qi);
+    var heading=document.createElement("h2");heading.textContent=(qi+1)+". "+q.statement;card.appendChild(heading);
+    q.answers.forEach(function(a,ai){
+      var label=document.createElement("label");label.className="option";label.dataset.correct=String(Boolean(a.isCorrect));
+      var input=document.createElement("input");input.type="radio";input.name="question_"+qi;input.value=a.id;
+      input.addEventListener("change",updateProgress);var text=document.createElement("span");text.textContent=String.fromCharCode(65+ai)+". "+a.body;
+      label.appendChild(input);label.appendChild(text);card.appendChild(label);
+    });
+    if(q.explanation){var explanation=document.createElement("div");explanation.className="explanation";explanation.textContent="Explicación: "+q.explanation;card.appendChild(explanation);}
+    host.appendChild(card);
+  });
+  function updateProgress(){var answered=document.querySelectorAll('input[type="radio"]:checked').length;document.getElementById("progress").textContent=answered+" de "+data.questions.length+" respondidas";}
+  document.getElementById("correct").addEventListener("click",function(){
+    var score=0;document.querySelectorAll(".question").forEach(function(card){
+      card.classList.add("checked");var selected=card.querySelector('input[type="radio"]:checked');
+      card.querySelectorAll(".option").forEach(function(label){label.classList.remove("correct","wrong");if(label.dataset.correct==="true")label.classList.add("correct");if(selected&&label.contains(selected)&&label.dataset.correct!=="true")label.classList.add("wrong");});
+      if(selected&&selected.closest(".option").dataset.correct==="true")score+=1;
+    });
+    var percent=data.questions.length?Math.round(score*100/data.questions.length):0;var result=document.getElementById("result");result.textContent="Resultado: "+score+" / "+data.questions.length+" ("+percent+"%)";result.classList.add("show");result.scrollIntoView({behavior:"smooth",block:"center"});
+  });
+})();
+</script>
+</body>
+</html>`;
 }

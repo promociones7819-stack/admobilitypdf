@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, PDFName } from "pdf-lib";
 import { normalizeRotation } from "../src/lib/pdf/types.ts";
 import { pageChunks, parsePageGroups, parsePageRange } from "../src/lib/pdf/ranges.ts";
 import { normalizeConfig, safeExternalUrl, safeMediaSource } from "../src/lib/flipbook/hotspots.ts";
-import { buildQuestionnairePdf, parseQuestionnaireText } from "../src/lib/pdf/questionnaire.ts";
+import {
+  buildQuestionnaireHtml,
+  buildQuestionnairePdf,
+  parseQuestionnaireText,
+} from "../src/lib/pdf/questionnaire.ts";
 
 test("interpreta rangos de páginas y elimina duplicados", () => {
   assert.deepEqual(parsePageRange("1-3, 3, 6, 8-7", 8), [0, 1, 2, 5, 7, 6]);
@@ -74,13 +78,27 @@ test("detecta cuestionarios y crea campos PDF rellenables", async () => {
   );
   assert.equal(questions.length, 2);
   assert.equal(questions[0]?.answers[0]?.isCorrect, true);
-  const bytes = await buildQuestionnairePdf({
+  const bytes = await buildQuestionnairePdf(
+    {
+      version: 1,
+      title: "Prueba",
+      description: "Selecciona una respuesta.",
+      questions,
+    },
+    { autoCorrect: true },
+  );
+  const pdf = await PDFDocument.load(bytes);
+  assert.equal(pdf.getForm().getFields().length, 4);
+  const button = pdf.getForm().getButton("corregir_formulario");
+  assert.ok(button.acroField.getWidgets()[0]?.dict.get(PDFName.of("A")));
+  assert.equal(pdf.getForm().getTextField("resultado_autocorreccion").isReadOnly(), true);
+  assert.equal(pdf.getPageCount(), 1);
+  const html = buildQuestionnaireHtml({
     version: 1,
-    title: "Prueba",
-    description: "Selecciona una respuesta.",
+    title: "</script><script>alert(1)</script>",
+    description: "Prueba local",
     questions,
   });
-  const pdf = await PDFDocument.load(bytes);
-  assert.equal(pdf.getForm().getFields().length, 2);
-  assert.equal(pdf.getPageCount(), 1);
+  assert.match(html, /Corregir formulario/);
+  assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
 });
