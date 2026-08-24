@@ -21,6 +21,7 @@ export interface FlipbookPage {
   height: number;
   imageUrl: string;
   links: NativeLink[];
+  text: string;
 }
 
 export interface OutlineEntry {
@@ -108,6 +109,12 @@ export async function loadFlipbookDocument(
       const imageUrl = blob ? URL.createObjectURL(blob) : canvas.toDataURL("image/jpeg", 0.82);
 
       const links: NativeLink[] = [];
+      const textContent = await page.getTextContent();
+      const text = textContent.items
+        .map((item) => ("str" in item ? item.str : ""))
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
       for (const annot of await page.getAnnotations()) {
         const a = annot as { subtype?: string; rect?: number[]; url?: string; dest?: unknown };
         if (a.subtype !== "Link" || !a.rect) continue;
@@ -136,6 +143,7 @@ export async function loadFlipbookDocument(
         height: base.height,
         imageUrl,
         links,
+        text,
       });
       page.cleanup();
       onProgress?.(n, doc.numPages);

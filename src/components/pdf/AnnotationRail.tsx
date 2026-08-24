@@ -17,6 +17,7 @@ import {
   Circle,
   MoveUpRight,
   SquareDashedBottom,
+  ShieldX,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -67,6 +68,7 @@ const TOOLS: { id: ToolId; icon: React.ReactNode }[] = [
   { id: "ellipse", icon: <Circle className="size-4" /> },
   { id: "image", icon: <ImageIcon className="size-4" /> },
   { id: "signature", icon: <Signature className="size-4" /> },
+  { id: "redact", icon: <ShieldX className="size-4" /> },
   { id: "studyCover", icon: <SquareDashedBottom className="size-4" /> },
 ];
 

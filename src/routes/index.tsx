@@ -24,8 +24,13 @@ const OcrProcessor = lazy(() =>
   import("@/components/ocr/OcrProcessor").then((module) => ({ default: module.OcrProcessor })),
 );
 const AiEmbeddedWorkspace = lazy(() => import("@/components/ai/AiEmbeddedWorkspace"));
+const ProfessionalToolsWorkspace = lazy(() =>
+  import("@/components/pro/ProfessionalToolsWorkspace").then((module) => ({
+    default: module.ProfessionalToolsWorkspace,
+  })),
+);
 
-type WorkspaceStage = "edit" | "flipbook" | "convert" | "ocr" | "ai";
+type WorkspaceStage = "edit" | "flipbook" | "convert" | "ocr" | "ai" | "pro";
 
 function ToolHeader({ title, onBack }: { title: string; onBack: () => void }) {
   return (
@@ -91,7 +96,7 @@ function Workspace() {
     }
   }
 
-  async function openTool(tool: "convert" | "ocr" | "ai") {
+  async function openTool(tool: "convert" | "ocr" | "ai" | "pro") {
     if (tool === "ocr" && hasDocument) {
       try {
         setOcrFile(await exportFile());
@@ -165,6 +170,13 @@ function Workspace() {
             </div>
           ) : stage === "ai" ? (
             <AiEmbeddedWorkspace onBack={backToEditor} />
+          ) : stage === "pro" ? (
+            <div className="flex h-full flex-col bg-background">
+              <ToolHeader title="Herramientas profesionales" onBack={backToEditor} />
+              <div className="min-h-0 flex-1">
+                <ProfessionalToolsWorkspace onPdfCreated={openCreatedPdf} />
+              </div>
+            </div>
           ) : !hasDocument ? (
             stage === "flipbook" ? (
               <div className="flex h-full flex-col bg-background">

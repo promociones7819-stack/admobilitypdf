@@ -18,6 +18,7 @@ import {
   Sparkles,
   Star,
   UploadCloud,
+  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -83,7 +84,7 @@ export function StartScreen({
   onOpenTool,
 }: {
   onRequestCompression: () => void;
-  onOpenTool: (tool: "convert" | "flipbook" | "ocr" | "ai") => void;
+  onOpenTool: (tool: "convert" | "flipbook" | "ocr" | "ai" | "pro") => void;
 }) {
   const {
     openFiles,
@@ -287,6 +288,17 @@ export function StartScreen({
               action={
                 <Button className={toolButtonClass} onClick={() => singleRef.current?.click()}>
                   Abrir editor
+                </Button>
+              }
+            />
+            <ToolCard
+              tone="coral"
+              icon={<Wrench />}
+              title="Herramientas profesionales"
+              description="Crea formularios, compara versiones, añade marcas, limpia datos y procesa lotes."
+              action={
+                <Button className={toolButtonClass} onClick={() => onOpenTool("pro")}>
+                  Abrir herramientas
                 </Button>
               }
             />

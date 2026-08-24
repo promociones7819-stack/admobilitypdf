@@ -8,10 +8,42 @@
     hotspots: Array.isArray(data.hotspots) ? data.hotspots : [],
     bookmarks: Array.isArray(data.bookmarks) ? data.bookmarks : [],
     brandImage: data.brandImage || "",
+    theme: data.theme || {},
     flip: null,
     page: 1,
     zoom: 1,
   };
+
+  function showInteractive(action) {
+    if (!action || (action.type !== "popup" && action.type !== "media")) return;
+    var backdrop = document.createElement("div");
+    backdrop.className = "interactive-backdrop";
+    var panel = document.createElement("section");
+    panel.className = "interactive-panel";
+    var close = document.createElement("button");
+    close.className = "btn";
+    close.textContent = "Cerrar";
+    close.style.cssText = "float:right;margin-left:12px";
+    close.onclick = function () { backdrop.remove(); };
+    panel.appendChild(close);
+    var heading = document.createElement("h2");
+    heading.textContent = action.title || (action.type === "popup" ? "Información" : "Multimedia");
+    panel.appendChild(heading);
+    if (action.type === "popup") {
+      var text = document.createElement("p");
+      text.textContent = action.text || "";
+      text.style.whiteSpace = "pre-wrap";
+      panel.appendChild(text);
+    } else {
+      var media = document.createElement(action.mediaType === "image" ? "img" : action.mediaType);
+      media.src = action.src;
+      media.controls = true;
+      panel.appendChild(media);
+    }
+    backdrop.onclick = function (event) { if (event.target === backdrop) backdrop.remove(); };
+    backdrop.appendChild(panel);
+    document.body.appendChild(backdrop);
+  }
 
   function resolveTargetPage(hotspot) {
     var action = hotspot.action || {};
@@ -46,6 +78,12 @@
       node.textContent = glyphs[preset] || "●";
     }
     node.setAttribute("aria-label", hotspot.label || "Abrir hipervínculo");
+    var style = hotspot.style || {};
+    if (style.background) node.style.background = style.background;
+    else if (state.theme.accent) node.style.background = state.theme.accent;
+    if (style.color) node.style.color = style.color;
+    if (typeof style.radius === "number") node.style.borderRadius = style.radius + "px";
+    if (style.animation && style.animation !== "none") node.style.animation = "fb-" + style.animation + " 1.8s ease-in-out infinite";
   }
 
   function buildPageElement(page) {
@@ -93,6 +131,10 @@
         a.target = "_blank";
         a.rel = "noopener noreferrer";
         a.dataset.fbAction = "url";
+      } else if (hotspot.action && (hotspot.action.type === "popup" || hotspot.action.type === "media")) {
+        a.href = "#interactive";
+        a.dataset.fbAction = "interactive";
+        a.dataset.fbPayload = JSON.stringify(hotspot.action);
       }
       decorateButton(a, hotspot);
       place(
@@ -177,6 +219,7 @@
     flip.on("flip", function (e) {
       state.page = e.data + 1;
       el("page").value = String(state.page);
+      playPageSound();
     });
     state.flip = flip;
   }
@@ -192,6 +235,27 @@
     el("book").style.transform = "scale(" + state.zoom + ")";
     el("book").style.transformOrigin = "center center";
     el("zoom-value").textContent = Math.round(state.zoom * 100) + "%";
+  }
+
+  function playPageSound() {
+    if (!state.theme.sound) return;
+    try {
+      var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      var context = new AudioContextClass();
+      var oscillator = context.createOscillator();
+      var gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(210, context.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(95, context.currentTime + 0.09);
+      gain.gain.setValueAtTime(0.025, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.11);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.11);
+      oscillator.onended = function () { context.close(); };
+    } catch (error) { /* El sonido es opcional. */ }
   }
 
   function buildBookmarks() {
@@ -220,6 +284,24 @@
     });
   }
 
+  function buildSearch(value) {
+    var list = el("search-results");
+    list.innerHTML = "";
+    var query = String(value || "").trim().toLocaleLowerCase();
+    if (query.length < 2) return;
+    state.pages.forEach(function (page) {
+      var text = String(page.text || "");
+      if (text.toLocaleLowerCase().indexOf(query) < 0) return;
+      var li = document.createElement("li");
+      var button = document.createElement("button");
+      button.textContent = "Página " + page.number + " · " + text.slice(0, 90);
+      button.onclick = function () { goTo(page.number); };
+      li.appendChild(button);
+      list.appendChild(li);
+    });
+    el("index-panel").hidden = false;
+  }
+
   function wireControls() {
     el("prev").addEventListener("click", function () { goTo(state.page - 1); });
     el("next").addEventListener("click", function () { goTo(state.page + 1); });
@@ -242,6 +324,7 @@
       panel.hidden = !panel.hidden;
       buildBook();
     });
+    el("search").addEventListener("input", function (event) { buildSearch(event.target.value); });
 
     document.addEventListener("keydown", function (event) {
       if (event.target instanceof HTMLInputElement) return;
@@ -288,6 +371,10 @@
           goTo(state.page + Number(target.dataset.fbDelta || 0));
           return;
         }
+        if (target.dataset.fbAction === "interactive") {
+          try { showInteractive(JSON.parse(target.dataset.fbPayload || "{}")); } catch (error) { console.warn(error); }
+          return;
+        }
         var href = target.getAttribute("href");
         if (href) window.open(href, "_blank", "noopener,noreferrer");
       },
@@ -306,6 +393,7 @@
       el("count").textContent = "/ " + state.pages.length;
       el("page").value = "1";
       buildBookmarks();
+      if (state.theme.background) document.querySelector(".stage").style.background = state.theme.background;
       buildBook();
       applyZoom();
       wireControls();

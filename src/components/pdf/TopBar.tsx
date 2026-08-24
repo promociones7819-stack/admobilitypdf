@@ -13,6 +13,8 @@ import {
   FileType2,
   MoreHorizontal,
   ScanText,
+  Wrench,
+  Search,
 } from "lucide-react";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -63,12 +65,14 @@ export function TopBar({
   openCompression,
   onCompressionOpened,
   onOpenTool,
+  onSearch,
 }: {
   onToggleThumbs: () => void;
   onOpenFlipbook?: () => void;
   openCompression: boolean;
   onCompressionOpened: () => void;
-  onOpenTool: (tool: "convert" | "ocr" | "ai") => void;
+  onOpenTool: (tool: "convert" | "ocr" | "ai" | "pro") => void;
+  onSearch: () => void;
 }) {
   const {
     fileName,
@@ -142,6 +146,9 @@ export function TopBar({
         <IconAction label="Rehacer (Ctrl/Cmd+Shift+Z)" onClick={redo} disabled={!canRedo}>
           <Redo2 className="size-4" />
         </IconAction>
+        <IconAction label="Buscar en el documento (Ctrl/Cmd+F)" onClick={onSearch}>
+          <Search className="size-4" />
+        </IconAction>
 
         <div className="ml-auto flex items-center gap-3">
           <DropdownMenu>
@@ -175,6 +182,9 @@ export function TopBar({
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => onOpenTool("ai")}>
                 <Sparkles className="mr-2 size-4" /> IA Documentos
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onOpenTool("pro")}>
+                <Wrench className="mr-2 size-4" /> Herramientas profesionales
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -211,6 +221,9 @@ export function TopBar({
           >
             <Sparkles className="mr-2 size-4" /> IA Documentos
           </Button>
+          <IconAction label="Herramientas profesionales" onClick={() => onOpenTool("pro")}>
+            <Wrench className="size-4" />
+          </IconAction>
           <div className="hidden max-w-[240px] flex-col items-end text-right sm:flex">
             <span className="truncate text-xs font-medium text-foreground">
               {fileName ?? "documento.pdf"}

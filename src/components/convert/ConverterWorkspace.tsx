@@ -1,11 +1,21 @@
 import { useRef, useState } from "react";
-import { FileDown, FileType2, Images, Loader2, ShieldCheck, UploadCloud } from "lucide-react";
+import {
+  FileDown,
+  FileType2,
+  Images,
+  Loader2,
+  ShieldCheck,
+  UploadCloud,
+  Presentation,
+  Sheet,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { IMAGE_PDF_ACCEPT, imagesPdfName, imagesToPdf } from "@/lib/convert/imagesPdf";
 import { docxToPdf, downloadBlob, pdfToDocx, swapExtension } from "@/lib/convert/wordPdf";
+import { excelToPdf, powerpointToPdf } from "@/lib/convert/officePdf";
 
-type Mode = "docx2pdf" | "pdf2docx" | "images2pdf";
+type Mode = "docx2pdf" | "pdf2docx" | "images2pdf" | "pptx2pdf" | "xlsx2pdf";
 
 interface ConverterCardProps {
   mode: Mode;
@@ -68,6 +78,12 @@ function ConverterCard({
         }
         const bytes = await docxToPdf(file);
         await deliverPdf(bytes, swapExtension(file.name, "pdf"));
+      } else if (mode === "pptx2pdf") {
+        if (!/\.pptx$/i.test(file.name)) throw new Error("Necesito un archivo .pptx.");
+        await deliverPdf(await powerpointToPdf(file), swapExtension(file.name, "pdf"));
+      } else if (mode === "xlsx2pdf") {
+        if (!/\.xlsx$/i.test(file.name)) throw new Error("Necesito un archivo .xlsx.");
+        await deliverPdf(await excelToPdf(file), swapExtension(file.name, "pdf"));
       } else {
         if (!/\.pdf$/i.test(file.name)) throw new Error("Necesito un archivo .pdf.");
         const blob = await pdfToDocx(file, setProgress);
@@ -107,6 +123,10 @@ function ConverterCard({
           <FileType2 className="size-7" />
         ) : mode === "pdf2docx" ? (
           <FileDown className="size-7" />
+        ) : mode === "pptx2pdf" ? (
+          <Presentation className="size-7" />
+        ) : mode === "xlsx2pdf" ? (
+          <Sheet className="size-7" />
         ) : (
           <Images className="size-7" />
         )}
@@ -178,6 +198,24 @@ export function ConverterWorkspace({
             accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             hint="Conversión básica: los diseños Word complejos pueden simplificarse."
             tone="coral"
+            {...(onPdfCreated ? { onPdfCreated } : {})}
+          />
+          <ConverterCard
+            mode="pptx2pdf"
+            title="PowerPoint a PDF"
+            description="Convierte cada diapositiva en una página apaisada y conserva su texto."
+            accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            hint="Las animaciones y composiciones muy complejas se simplifican."
+            tone="coral"
+            {...(onPdfCreated ? { onPdfCreated } : {})}
+          />
+          <ConverterCard
+            mode="xlsx2pdf"
+            title="Excel a PDF"
+            description="Convierte las hojas de un libro Excel en tablas PDF apaisadas."
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            hint="Optimizado para tablas de hasta diez columnas visibles."
+            tone="lilac"
             {...(onPdfCreated ? { onPdfCreated } : {})}
           />
           <ConverterCard

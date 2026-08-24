@@ -248,6 +248,18 @@ function drawAnnotation(ctx: DrawContext, annotation: Annotation, images: Map<st
   const anchor = map(annotation.x, annotation.y + annotation.height);
 
   switch (annotation.kind) {
+    case "redact": {
+      page.drawRectangle({
+        x: anchor.x,
+        y: anchor.y,
+        width: boxWidth,
+        height: boxHeight,
+        rotate: degrees(rotation),
+        color: rgb(0, 0, 0),
+        opacity: 1,
+      });
+      break;
+    }
     case "studyCover": {
       if (ctx.coverMode === "omit") break;
       const outline = ctx.coverMode === "outline";

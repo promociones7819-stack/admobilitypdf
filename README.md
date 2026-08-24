@@ -9,6 +9,26 @@ en `http://127.0.0.1:4173`; esa dirección pertenece únicamente a tu ordenador.
 Los flipbooks pueden exportarse como un único archivo HTML que sí se abre directamente con doble
 clic, sin servidor ni instalación.
 
+## Funciones integradas
+
+- Editor PDF completo con organización de páginas, anotaciones, imágenes, firmas, búsqueda y
+  censura permanente.
+- Compresión antes y después de editar, combinación, división, extracción y conversión de JPG,
+  HEIC, Word, PowerPoint y Excel a PDF.
+- OCR por rangos y en siete idiomas, con orientación automática y capa de texto posicionada.
+- Formularios PDF rellenables, marcas de agua, cabeceras, pies, numeración Bates, QR y limpieza de
+  metadatos.
+- Comparación de dos PDF por texto y por imagen, procesamiento por lotes y auditoría de estructura,
+  accesibilidad y señales PDF/A.
+- Protección AES-256 con permisos y firma digital mediante certificado P12/PFX; los certificados y
+  contraseñas no se guardan.
+- Flipbook local en HTML con búsqueda, índice editable, temas, sonido opcional, ventanas, vídeo,
+  audio, imágenes y botones 3D configurables.
+- Carpetas de proyecto locales con cambio de nombre, archivo, versiones manuales y restauración.
+
+Todo el tratamiento principal se realiza en el navegador. Solo el primer uso de algunos idiomas OCR
+puede necesitar descargar sus datos de reconocimiento.
+
 Crea una Web App completa de edición de PDFs
 
 Quiero crear una web app profesional para editar, organizar y anotar archivos PDF, similar en concepto a un editor PDF sencillo tipo Adobe Acrobat, pero con una interfaz mucho más limpia, moderna y fácil de usar.

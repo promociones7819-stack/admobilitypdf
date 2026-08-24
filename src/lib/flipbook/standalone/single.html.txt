@@ -22,12 +22,14 @@ __CSS__
       <span id="zoom-value" class="muted">100%</span>
       <button id="zoom-in" class="btn" type="button" title="Ampliar">+</button>
       <button id="fullscreen" class="btn" type="button" title="Pantalla completa">⛶</button>
+      <input id="search" class="search-input" placeholder="Buscar…" aria-label="Buscar en el documento" />
     </header>
 
     <div class="body">
       <aside id="index-panel" class="panel" hidden>
         <h2>Índice</h2>
         <ul id="bookmarks"></ul>
+        <ul id="search-results"></ul>
       </aside>
       <main class="stage">
         <div id="status" class="status">Cargando flipbook…</div>

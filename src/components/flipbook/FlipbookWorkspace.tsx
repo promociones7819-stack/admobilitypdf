@@ -67,6 +67,7 @@ import {
   makeHotspotId,
   normalizeConfig,
   safeExternalUrl,
+  safeMediaSource,
   saveConfig,
   actionLabel,
   EMPTY_CONFIG,
@@ -80,9 +81,10 @@ import { saveToActiveProject } from "@/lib/projects/storage";
 import { FlipbookStage, type FlipbookHandle } from "./FlipbookStage";
 import { AutoMenuDialog } from "./AutoMenuDialog";
 import { HotspotEditor } from "./HotspotEditor";
+import { OutlineEditorDialog } from "./OutlineEditorDialog";
 
 type Mode = "view" | "edit";
-type DraftKind = "page" | "url" | "menu";
+type DraftKind = "page" | "url" | "menu" | "popup" | "media";
 
 interface Geometry {
   x: number;
@@ -112,6 +114,7 @@ export function FlipbookWorkspace({
   const [adding, setAdding] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [autoMenu, setAutoMenu] = useState(false);
+  const [outlineOpen, setOutlineOpen] = useState(false);
   const [srcFile, setSrcFile] = useState<File | null>(null);
   const [publishing, setPublishing] = useState(false);
 
@@ -120,9 +123,13 @@ export function FlipbookWorkspace({
     kind: DraftKind;
     targetPage: string;
     url: string;
+    title: string;
+    text: string;
+    mediaType: "video" | "audio" | "image";
   } | null>(null);
   const openRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
+  const mediaRef = useRef<HTMLInputElement>(null);
   const flipRef = useRef<FlipbookHandle>(null);
   const initialFileRef = useRef<File | null>(null);
   const documentRef = useRef<FlipbookDocument | null>(null);
@@ -135,6 +142,7 @@ export function FlipbookWorkspace({
     () => config.hotspots.filter((h) => h.page === page),
     [config.hotspots, page],
   );
+  const effectiveOutline = config.outline ?? doc?.outline ?? [];
 
   const setConfigWithHistory = (
     update: FlipbookConfig | ((current: FlipbookConfig) => FlipbookConfig),
@@ -265,7 +273,15 @@ export function FlipbookWorkspace({
     setConfigWithHistory((prev) => ({ ...prev, hotspots: [...prev.hotspots, hotspot] }));
     setSelectedId(hotspot.id);
     setAdding(false);
-    setDialog({ id: hotspot.id, kind: "page", targetPage: String(config.menuPage), url: "" });
+    setDialog({
+      id: hotspot.id,
+      kind: "page",
+      targetPage: String(config.menuPage),
+      url: "",
+      title: "",
+      text: "",
+      mediaType: "video",
+    });
   };
 
   const createPresetButton = (buttonPreset: HotspotButtonPreset) => {
@@ -288,7 +304,15 @@ export function FlipbookWorkspace({
     setConfigWithHistory((prev) => ({ ...prev, hotspots: [...prev.hotspots, hotspot] }));
     setSelectedId(hotspot.id);
     setAdding(false);
-    setDialog({ id: hotspot.id, kind: "page", targetPage: String(config.menuPage), url: "" });
+    setDialog({
+      id: hotspot.id,
+      kind: "page",
+      targetPage: String(config.menuPage),
+      url: "",
+      title: "",
+      text: "",
+      mediaType: "video",
+    });
   };
 
   const openDialogFor = (hotspot: Hotspot) =>
@@ -300,6 +324,12 @@ export function FlipbookWorkspace({
           ? String(hotspot.action.targetPage)
           : String(config.menuPage),
       url: hotspot.action.type === "url" ? hotspot.action.url : "",
+      title:
+        hotspot.action.type === "popup" || hotspot.action.type === "media"
+          ? (hotspot.action.title ?? "")
+          : "",
+      text: hotspot.action.type === "popup" ? hotspot.action.text : "",
+      mediaType: hotspot.action.type === "media" ? hotspot.action.mediaType : "video",
     });
 
   const saveDialog = () => {
@@ -312,6 +342,28 @@ export function FlipbookWorkspace({
         return;
       }
       action = { type: "url", url };
+    } else if (dialog.kind === "popup") {
+      if (!dialog.text.trim()) {
+        toast.error("Escribe el contenido de la ventana.");
+        return;
+      }
+      action = {
+        type: "popup",
+        title: dialog.title.trim() || "Información",
+        text: dialog.text.trim(),
+      };
+    } else if (dialog.kind === "media") {
+      const source = safeMediaSource(dialog.url, dialog.mediaType);
+      if (!source) {
+        toast.error("Selecciona un archivo o introduce una dirección http/https válida.");
+        return;
+      }
+      action = {
+        type: "media",
+        mediaType: dialog.mediaType,
+        src: source,
+        ...(dialog.title.trim() ? { title: dialog.title.trim() } : {}),
+      };
     } else if (dialog.kind === "menu") {
       action = { type: "menu" };
     } else {
@@ -562,6 +614,49 @@ export function FlipbookWorkspace({
             <Button variant="outline" size="sm" onClick={() => setAutoMenu(true)}>
               <Wand2 className="mr-2 size-4" /> Crear menú automáticamente
             </Button>
+            <Button variant="outline" size="sm" onClick={() => setOutlineOpen(true)}>
+              <List className="mr-2 size-4" /> Editar índice
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  Diseño
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuLabel>Plantillas del visor</DropdownMenuLabel>
+                <DropdownMenuItem
+                  onSelect={() =>
+                    setConfigWithHistory((prev) => ({
+                      ...prev,
+                      theme: { background: "#e2e8f0", accent: "#2563eb", sound: false },
+                    }))
+                  }
+                >
+                  Profesional azul
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() =>
+                    setConfigWithHistory((prev) => ({
+                      ...prev,
+                      theme: { background: "#fff1f2", accent: "#e85d4a", sound: false },
+                    }))
+                  }
+                >
+                  Coral AD Mobility
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() =>
+                    setConfigWithHistory((prev) => ({
+                      ...prev,
+                      theme: { background: "#111827", accent: "#22c55e", sound: true },
+                    }))
+                  }
+                >
+                  Presentación oscura
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Sheet>
               <SheetTrigger asChild>
                 <Button variant="outline" size="sm" className="lg:hidden">
@@ -703,7 +798,7 @@ export function FlipbookWorkspace({
         </Button>
 
         <div className="ml-auto flex items-center gap-2">
-          {doc.outline.length > 0 && (
+          {effectiveOutline.length > 0 && (
             <Sheet>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="sm">
@@ -715,7 +810,7 @@ export function FlipbookWorkspace({
                   <SheetTitle>Índice del documento</SheetTitle>
                 </SheetHeader>
                 <ul className="mt-4 space-y-1">
-                  {doc.outline.map((entry, index) => (
+                  {effectiveOutline.map((entry, index) => (
                     <li key={`${entry.title}-${index}`}>
                       <button
                         className="w-full rounded px-2 py-1 text-left text-sm hover:bg-accent"
@@ -782,6 +877,7 @@ export function FlipbookWorkspace({
             hotspots={config.hotspots}
             menuPage={config.menuPage}
             zoom={zoom}
+            {...(config.theme ? { theme: config.theme } : {})}
             onPageChange={setPage}
             handleRef={flipRef}
           />
@@ -820,6 +916,49 @@ export function FlipbookWorkspace({
                     }))
                   }
                 />
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <label className="text-xs text-muted-foreground">
+                    Fondo
+                    <input
+                      type="color"
+                      className="mt-1 h-9 w-full rounded border"
+                      value={config.theme?.background ?? "#e2e8f0"}
+                      onChange={(event) =>
+                        setConfigWithHistory((prev) => ({
+                          ...prev,
+                          theme: { ...prev.theme, background: event.target.value },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs text-muted-foreground">
+                    Color de botones
+                    <input
+                      type="color"
+                      className="mt-1 h-9 w-full rounded border"
+                      value={config.theme?.accent ?? "#2563eb"}
+                      onChange={(event) =>
+                        setConfigWithHistory((prev) => ({
+                          ...prev,
+                          theme: { ...prev.theme, accent: event.target.value },
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+                <label className="flex items-center gap-2 pt-1 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={config.theme?.sound ?? false}
+                    onChange={(event) =>
+                      setConfigWithHistory((prev) => ({
+                        ...prev,
+                        theme: { ...prev.theme, sound: event.target.checked },
+                      }))
+                    }
+                  />
+                  Sonido suave al pasar página
+                </label>
               </div>
 
               <div className="space-y-2 border-t border-border pt-4">
@@ -845,6 +984,60 @@ export function FlipbookWorkspace({
                         }
                       />
                     </div>
+                    {selected.buttonPreset && (
+                      <div className="grid grid-cols-2 gap-2 rounded-lg border p-2">
+                        <label className="text-xs text-muted-foreground">
+                          Fondo
+                          <input
+                            type="color"
+                            className="mt-1 h-8 w-full"
+                            value={selected.style?.background ?? config.theme?.accent ?? "#2563eb"}
+                            onChange={(event) =>
+                              updateHotspot(selected.id, {
+                                style: { ...selected.style, background: event.target.value },
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="text-xs text-muted-foreground">
+                          Texto
+                          <input
+                            type="color"
+                            className="mt-1 h-8 w-full"
+                            value={selected.style?.color ?? "#ffffff"}
+                            onChange={(event) =>
+                              updateHotspot(selected.id, {
+                                style: { ...selected.style, color: event.target.value },
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="col-span-2 text-xs text-muted-foreground">
+                          Animación
+                          <Select
+                            value={selected.style?.animation ?? "none"}
+                            onValueChange={(value) =>
+                              updateHotspot(selected.id, {
+                                style: {
+                                  ...selected.style,
+                                  animation: value as "none" | "pulse" | "bounce" | "float",
+                                },
+                              })
+                            }
+                          >
+                            <SelectTrigger className="mt-1 h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Sin animación</SelectItem>
+                              <SelectItem value="pulse">Pulso</SelectItem>
+                              <SelectItem value="bounce">Rebote</SelectItem>
+                              <SelectItem value="float">Flotante</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </label>
+                      </div>
+                    )}
                     <div>
                       <Label className="text-xs text-muted-foreground">Destino</Label>
                       <p className="truncate text-sm">{actionLabel(selected, config.menuPage)}</p>
@@ -941,6 +1134,8 @@ export function FlipbookWorkspace({
                     <SelectItem value="page">Página del documento</SelectItem>
                     <SelectItem value="url">URL externa</SelectItem>
                     <SelectItem value="menu">Volver al menú</SelectItem>
+                    <SelectItem value="popup">Ventana informativa</SelectItem>
+                    <SelectItem value="media">Vídeo, audio o imagen</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -993,6 +1188,105 @@ export function FlipbookWorkspace({
                   Al pulsarlo llevará a la página de menú configurada ({config.menuPage}).
                 </p>
               )}
+              {dialog.kind === "popup" && (
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label>Título</Label>
+                    <Input
+                      value={dialog.title}
+                      onChange={(event) => setDialog({ ...dialog, title: event.target.value })}
+                      placeholder="Más información"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Contenido</Label>
+                    <textarea
+                      className="min-h-32 w-full rounded-md border border-input bg-background p-3 text-sm"
+                      value={dialog.text}
+                      onChange={(event) => setDialog({ ...dialog, text: event.target.value })}
+                      placeholder="Texto que aparecerá sin abandonar el flipbook"
+                    />
+                  </div>
+                </div>
+              )}
+              {dialog.kind === "media" && (
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label>Tipo</Label>
+                    <Select
+                      value={dialog.mediaType}
+                      onValueChange={(value) =>
+                        setDialog({ ...dialog, mediaType: value as typeof dialog.mediaType })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="video">Vídeo</SelectItem>
+                        <SelectItem value="audio">Audio</SelectItem>
+                        <SelectItem value="image">Imagen</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Título</Label>
+                    <Input
+                      value={dialog.title}
+                      onChange={(event) => setDialog({ ...dialog, title: event.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Archivo local o URL</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={dialog.url}
+                        onChange={(event) => setDialog({ ...dialog, url: event.target.value })}
+                        placeholder="https://... o archivo incrustado"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => mediaRef.current?.click()}
+                      >
+                        Archivo
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      El archivo local se incrusta en el HTML. Para publicaciones pequeñas usa
+                      vídeos comprimidos.
+                    </p>
+                  </div>
+                  <input
+                    ref={mediaRef}
+                    type="file"
+                    accept="video/*,audio/*,image/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () =>
+                        setDialog((current) =>
+                          current
+                            ? {
+                                ...current,
+                                url: String(reader.result),
+                                mediaType: file.type.startsWith("audio/")
+                                  ? "audio"
+                                  : file.type.startsWith("image/")
+                                    ? "image"
+                                    : "video",
+                                title: current.title || file.name,
+                              }
+                            : current,
+                        );
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>
@@ -1007,7 +1301,7 @@ export function FlipbookWorkspace({
       <AutoMenuDialog
         open={autoMenu}
         onOpenChange={setAutoMenu}
-        outline={doc.outline}
+        outline={effectiveOutline}
         menuPage={page}
         pageCount={pageCount}
         pageSize={currentPage ? { width: currentPage.width, height: currentPage.height } : null}
@@ -1023,6 +1317,13 @@ export function FlipbookWorkspace({
           }
           toast.success(`Menú creado con ${created.length} enlaces`);
         }}
+      />
+      <OutlineEditorDialog
+        open={outlineOpen}
+        onOpenChange={setOutlineOpen}
+        entries={effectiveOutline}
+        pageCount={pageCount}
+        onSave={(outline) => setConfigWithHistory((prev) => ({ ...prev, outline }))}
       />
 
       <input

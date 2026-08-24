@@ -10,6 +10,8 @@
 export type HotspotAction =
   | { type: "page"; targetPage: number }
   | { type: "url"; url: string }
+  | { type: "popup"; title: string; text: string }
+  | { type: "media"; mediaType: "video" | "audio" | "image"; src: string; title?: string }
   /** Atajo "Volver al menú": resuelve a la página de menú del documento. */
   | { type: "menu" };
 
@@ -28,6 +30,12 @@ export interface Hotspot {
   label?: string;
   /** Apariencia visible opcional. Sin valor, el hotspot es invisible. */
   buttonPreset?: HotspotButtonPreset;
+  style?: {
+    background?: string;
+    color?: string;
+    radius?: number;
+    animation?: "none" | "pulse" | "bounce" | "float";
+  };
   action: HotspotAction;
 }
 
@@ -36,6 +44,12 @@ export interface FlipbookConfig {
   /** Página de inicio/menú del documento (1-based). */
   menuPage: number;
   hotspots: Hotspot[];
+  theme?: {
+    background?: string;
+    accent?: string;
+    sound?: boolean;
+  };
+  outline?: Array<{ title: string; page: number; depth: number }>;
 }
 
 export const EMPTY_CONFIG: FlipbookConfig = { version: 1, menuPage: 1, hotspots: [] };
@@ -83,6 +97,22 @@ export function normalizeConfig(input: unknown): FlipbookConfig {
     const action = h.action;
     if (action.type === "page" && typeof action.targetPage !== "number") continue;
     if (action.type === "url" && typeof action.url !== "string") continue;
+    if (action.type === "popup" && typeof action.text !== "string") continue;
+    if (action.type === "media" && typeof action.src !== "string") continue;
+    if (action.type === "media" && !safeMediaSource(action.src, action.mediaType)) continue;
+    const rawStyle = h.style && typeof h.style === "object" ? h.style : undefined;
+    const style: Hotspot["style"] | undefined = rawStyle
+      ? {
+          ...(safeCssColor(rawStyle.background) ? { background: rawStyle.background } : {}),
+          ...(safeCssColor(rawStyle.color) ? { color: rawStyle.color } : {}),
+          ...(Number.isFinite(rawStyle.radius)
+            ? { radius: Math.min(999, Math.max(0, Number(rawStyle.radius))) }
+            : {}),
+          ...(["none", "pulse", "bounce", "float"].includes(rawStyle.animation ?? "")
+            ? { animation: rawStyle.animation }
+            : {}),
+        }
+      : undefined;
     hotspots.push({
       id: typeof h.id === "string" ? h.id : makeHotspotId(),
       page: Math.max(1, Math.round(h.page)),
@@ -91,6 +121,7 @@ export function normalizeConfig(input: unknown): FlipbookConfig {
       width: Math.max(1, Number(h.width) || 1),
       height: Math.max(1, Number(h.height) || 1),
       ...(typeof h.label === "string" ? { label: h.label } : {}),
+      ...(style && Object.keys(style).length ? { style } : {}),
       ...((
         [
           "circle",
@@ -107,16 +138,60 @@ export function normalizeConfig(input: unknown): FlipbookConfig {
       action:
         action.type === "url"
           ? { type: "url", url: action.url }
-          : action.type === "menu"
-            ? { type: "menu" }
-            : { type: "page", targetPage: Math.max(1, Math.round(action.targetPage)) },
+          : action.type === "popup"
+            ? { type: "popup", title: action.title ?? "Información", text: action.text }
+            : action.type === "media"
+              ? {
+                  type: "media",
+                  mediaType: ["video", "audio", "image"].includes(action.mediaType)
+                    ? action.mediaType
+                    : "video",
+                  src: action.src,
+                  ...(action.title ? { title: action.title } : {}),
+                }
+              : action.type === "menu"
+                ? { type: "menu" }
+                : { type: "page", targetPage: Math.max(1, Math.round(action.targetPage)) },
     });
   }
   return {
     version: 1,
     menuPage: Math.max(1, Math.round(Number(data.menuPage) || 1)),
     hotspots,
+    ...(data.theme && typeof data.theme === "object"
+      ? {
+          theme: {
+            ...(safeCssColor(data.theme.background) ? { background: data.theme.background } : {}),
+            ...(safeCssColor(data.theme.accent) ? { accent: data.theme.accent } : {}),
+            ...(typeof data.theme.sound === "boolean" ? { sound: data.theme.sound } : {}),
+          },
+        }
+      : {}),
+    ...(Array.isArray(data.outline)
+      ? {
+          outline: data.outline
+            .filter((item) => item && typeof item.title === "string")
+            .map((item) => ({
+              title: item.title,
+              page: Math.max(1, Math.round(Number(item.page) || 1)),
+              depth: Math.max(0, Math.round(Number(item.depth) || 0)),
+            })),
+        }
+      : {}),
   };
+}
+
+function safeCssColor(value: unknown): value is string {
+  return typeof value === "string" && /^#[0-9a-f]{3,8}$/i.test(value.trim());
+}
+
+/** Multimedia local embebida o URL web segura. */
+export function safeMediaSource(raw: string, mediaType?: string): string | null {
+  const value = raw.trim();
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  const expected = mediaType === "image" ? "image" : mediaType === "audio" ? "audio" : "video";
+  return new RegExp(`^data:${expected}/[a-z0-9.+-]+(?:;[^,]*)?,`, "i").test(value) ? value : null;
 }
 
 export function buttonPresetGlyph(preset: HotspotButtonPreset): string {
@@ -138,6 +213,9 @@ export function resolveTargetPage(hotspot: Hotspot, menuPage: number): number | 
 
 export function actionLabel(hotspot: Hotspot, menuPage: number): string {
   if (hotspot.action.type === "url") return hotspot.action.url;
+  if (hotspot.action.type === "popup") return `Ventana: ${hotspot.action.title}`;
+  if (hotspot.action.type === "media")
+    return `${hotspot.action.mediaType}: ${hotspot.action.title || "multimedia"}`;
   if (hotspot.action.type === "menu") return `Volver al menú (página ${menuPage})`;
   return `Página ${hotspot.action.targetPage}`;
 }

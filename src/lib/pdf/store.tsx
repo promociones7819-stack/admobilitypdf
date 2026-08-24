@@ -41,7 +41,12 @@ import {
   getActiveProjectWorkspaceInfo,
   loadWorkspaceFromActiveProject,
   saveWorkspaceToActiveProject,
+  saveProjectVersion,
+  listProjectVersions,
+  loadProjectVersion,
+  type ProjectVersionInfo,
 } from "@/lib/projects/storage";
+import { flattenForSecureRedaction } from "./security";
 
 const MAX_BYTES = 150 * 1024 * 1024;
 const MAX_HISTORY = 100;
@@ -208,6 +213,9 @@ interface EditorContextValue {
   restoreRecovery: () => Promise<void>;
   restoreProject: () => Promise<void>;
   discardRecovery: () => Promise<void>;
+  createProjectVersion: (label: string) => Promise<ProjectVersionInfo>;
+  getProjectVersions: () => Promise<ProjectVersionInfo[]>;
+  restoreProjectVersion: (file: string) => Promise<void>;
 }
 
 const EditorContext = createContext<EditorContextValue | null>(null);
@@ -332,6 +340,35 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     if (!snapshot) throw new Error("project-recovery-unavailable");
     await restoreSnapshot(snapshot);
   }, [restoreSnapshot]);
+
+  const createProjectVersion = useCallback(
+    async (label: string) => {
+      if (!pages.length) throw new Error("empty-document");
+      const snapshot = createWorkspaceSnapshot({
+        fileName,
+        pages,
+        annotations,
+        coverExport,
+        sources,
+        images,
+      });
+      const version = await saveProjectVersion(snapshot, label);
+      if (!version) throw new Error("project-version-unavailable");
+      return version;
+    },
+    [annotations, coverExport, fileName, images, pages, sources],
+  );
+
+  const getProjectVersions = useCallback(() => listProjectVersions(), []);
+
+  const restoreProjectVersion = useCallback(
+    async (file: string) => {
+      const snapshot = await loadProjectVersion(file);
+      if (!snapshot) throw new Error("project-version-unavailable");
+      await restoreSnapshot(snapshot);
+    },
+    [restoreSnapshot],
+  );
 
   const discardRecovery = useCallback(async () => {
     await clearRecovery();
@@ -713,11 +750,14 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
   const download = useCallback(async () => {
     setBusy(true);
     try {
-      const bytes = await buildPdf(pages, sources, {
+      const draft = await buildPdf(pages, sources, {
         annotations,
         images,
         coverMode: coverExport,
       });
+      const bytes = annotations.some((item) => item.kind === "redact")
+        ? await flattenForSecureRedaction(draft)
+        : draft;
       await downloadBytes(bytes, editedFileName(fileName));
       const fallbacks = getFontFallbacks();
       if (fallbacks.length)
@@ -733,11 +773,14 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
   const exportFile = useCallback(async () => {
     setBusy(true);
     try {
-      const bytes = await buildPdf(pages, sources, {
+      const draft = await buildPdf(pages, sources, {
         annotations,
         images,
         coverMode: coverExport,
       });
+      const bytes = annotations.some((item) => item.kind === "redact")
+        ? await flattenForSecureRedaction(draft)
+        : draft;
       const name = editedFileName(fileName);
       return new File([bytes.slice(0) as unknown as BlobPart], name, {
         type: "application/pdf",
@@ -752,11 +795,16 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       setBusy(true);
       try {
         const subset = pages.filter((p) => ids.includes(p.id));
-        const bytes = await buildPdf(subset, sources, {
+        const draft = await buildPdf(subset, sources, {
           annotations,
           images,
           coverMode: coverExport,
         });
+        const bytes = annotations.some(
+          (item) => item.kind === "redact" && ids.includes(item.pageId),
+        )
+          ? await flattenForSecureRedaction(draft)
+          : draft;
         const base = (fileName ?? "documento").replace(/\.pdf$/i, "");
         await downloadBytes(bytes, `${base}-extraido.pdf`);
       } finally {
@@ -775,11 +823,16 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
         const base = (fileName ?? "documento").replace(/\.pdf$/i, "");
         if (validGroups.length === 1) {
           const subset = pages.filter((page) => validGroups[0]!.includes(page.id));
-          const bytes = await buildPdf(subset, sources, {
+          const draft = await buildPdf(subset, sources, {
             annotations,
             images,
             coverMode: coverExport,
           });
+          const bytes = annotations.some(
+            (item) => item.kind === "redact" && validGroups[0]!.includes(item.pageId),
+          )
+            ? await flattenForSecureRedaction(draft)
+            : draft;
           await downloadBytes(bytes, `${base}-parte-1.pdf`);
           return;
         }
@@ -788,11 +841,16 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
         for (let index = 0; index < validGroups.length; index += 1) {
           const ids = validGroups[index]!;
           const subset = pages.filter((page) => ids.includes(page.id));
-          const bytes = await buildPdf(subset, sources, {
+          const draft = await buildPdf(subset, sources, {
             annotations,
             images,
             coverMode: coverExport,
           });
+          const bytes = annotations.some(
+            (item) => item.kind === "redact" && ids.includes(item.pageId),
+          )
+            ? await flattenForSecureRedaction(draft)
+            : draft;
           zip.file(`${base}-parte-${index + 1}.pdf`, bytes);
         }
         const archive = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
@@ -884,6 +942,9 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       restoreRecovery,
       restoreProject,
       discardRecovery,
+      createProjectVersion,
+      getProjectVersions,
+      restoreProjectVersion,
     }),
     [
       activePageId,
@@ -924,6 +985,9 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       restoreRecovery,
       restoreProject,
       discardRecovery,
+      createProjectVersion,
+      getProjectVersions,
+      restoreProjectVersion,
       rotatePages,
       selectedAnnotationId,
       selection,

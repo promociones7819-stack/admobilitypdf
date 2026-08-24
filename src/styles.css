@@ -23,6 +23,34 @@
     transform 0.15s,
     box-shadow 0.15s;
 }
+
+@keyframes fb-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+@keyframes fb-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+@keyframes fb-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
 .flipbook-3d-button:hover {
   filter: brightness(1.12);
   transform: translateY(-1px);

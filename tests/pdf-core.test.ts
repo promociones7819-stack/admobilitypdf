@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeRotation } from "../src/lib/pdf/types.ts";
 import { pageChunks, parsePageGroups, parsePageRange } from "../src/lib/pdf/ranges.ts";
-import { normalizeConfig, safeExternalUrl } from "../src/lib/flipbook/hotspots.ts";
+import { normalizeConfig, safeExternalUrl, safeMediaSource } from "../src/lib/flipbook/hotspots.ts";
 
 test("interpreta rangos de páginas y elimina duplicados", () => {
   assert.deepEqual(parsePageRange("1-3, 3, 6, 8-7", 8), [0, 1, 2, 5, 7, 6]);
@@ -37,4 +37,31 @@ test("descarta hotspots inválidos al importar configuración", () => {
   assert.equal(result.menuPage, 1);
   assert.equal(result.hotspots.length, 1);
   assert.equal(result.hotspots[0]?.action.type, "page");
+});
+
+test("conserva multimedia y estilos seguros del flipbook", () => {
+  assert.equal(safeMediaSource("javascript:alert(1)", "video"), null);
+  assert.equal(
+    safeMediaSource("data:image/png;base64,AA==", "image")?.startsWith("data:image"),
+    true,
+  );
+  const result = normalizeConfig({
+    version: 1,
+    menuPage: 2,
+    theme: { background: "url(javascript:alert(1))", accent: "#0f766e", sound: true },
+    hotspots: [
+      {
+        page: 1,
+        x: 10,
+        y: 20,
+        width: 30,
+        height: 40,
+        style: { background: "#ffffff", animation: "pulse" },
+        action: { type: "popup", title: "Ficha", text: "Contenido" },
+      },
+    ],
+  });
+  assert.equal(result.theme?.background, undefined);
+  assert.equal(result.theme?.accent, "#0f766e");
+  assert.equal(result.hotspots[0]?.style?.animation, "pulse");
 });

@@ -10,6 +10,7 @@ import { AnnotationRail } from "./AnnotationRail";
 import { AnnotationOptions } from "./AnnotationOptions";
 import { StatusBar } from "./StatusBar";
 import { TopBar } from "./TopBar";
+import { SearchDialog } from "./SearchDialog";
 
 import { ThumbnailPanel } from "./ThumbnailPanel";
 import { zoomIn, zoomOut, type ZoomMode } from "./zoom";
@@ -23,7 +24,7 @@ export function Editor({
   onOpenFlipbook?: () => void;
   openCompression: boolean;
   onCompressionOpened: () => void;
-  onOpenTool: (tool: "convert" | "ocr" | "ai") => void;
+  onOpenTool: (tool: "convert" | "ocr" | "ai" | "pro") => void;
 }) {
   const {
     pages,
@@ -42,6 +43,7 @@ export function Editor({
   const [zoom, setZoom] = useState<ZoomMode>("fit-page");
   const [effectiveScale, setEffectiveScale] = useState(1);
   const [thumbsOpen, setThumbsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const clipboardRef = useRef<Annotation | null>(null);
 
   useEffect(() => {
@@ -51,6 +53,12 @@ export function Editor({
       if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable))
         return;
       const mod = event.metaKey || event.ctrlKey;
+
+      if (mod && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        setSearchOpen(true);
+        return;
+      }
 
       if (mod && event.key.toLowerCase() === "z") {
         event.preventDefault();
@@ -146,6 +154,7 @@ export function Editor({
           openCompression={openCompression}
           onCompressionOpened={onCompressionOpened}
           onOpenTool={onOpenTool}
+          onSearch={() => setSearchOpen(true)}
           {...(onOpenFlipbook ? { onOpenFlipbook } : {})}
         />
         <div className="flex flex-1 overflow-hidden">
@@ -166,6 +175,7 @@ export function Editor({
             <ThumbnailPanel />
           </SheetContent>
         </Sheet>
+        <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
       </div>
     </TooltipProvider>
   );

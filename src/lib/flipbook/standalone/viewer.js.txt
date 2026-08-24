@@ -15,6 +15,37 @@ const state = {
   zoom: 1,
 };
 
+function showInteractive(action) {
+  if (!action || (action.type !== "popup" && action.type !== "media")) return;
+  const backdrop = document.createElement("div");
+  backdrop.className = "interactive-backdrop";
+  const panel = document.createElement("section");
+  panel.className = "interactive-panel";
+  const close = document.createElement("button");
+  close.className = "btn";
+  close.textContent = "Cerrar";
+  close.style.cssText = "float:right;margin-left:12px";
+  close.onclick = () => backdrop.remove();
+  panel.appendChild(close);
+  const heading = document.createElement("h2");
+  heading.textContent = action.title || (action.type === "popup" ? "Información" : "Multimedia");
+  panel.appendChild(heading);
+  if (action.type === "popup") {
+    const text = document.createElement("p");
+    text.textContent = action.text || "";
+    text.style.whiteSpace = "pre-wrap";
+    panel.appendChild(text);
+  } else {
+    const media = document.createElement(action.mediaType === "image" ? "img" : action.mediaType);
+    media.src = action.src;
+    media.controls = true;
+    panel.appendChild(media);
+  }
+  backdrop.onclick = (event) => { if (event.target === backdrop) backdrop.remove(); };
+  backdrop.appendChild(panel);
+  document.body.appendChild(backdrop);
+}
+
 async function readJson(path, fallback) {
   try {
     const res = await fetch(path);
@@ -62,6 +93,8 @@ async function renderDocument() {
     await page.render({ canvasContext: ctx, viewport }).promise;
 
     const links = [];
+    const content = await page.getTextContent();
+    const text = content.items.map((item) => item.str || "").join(" ").replace(/\s+/g, " ").trim();
     try {
       const annotations = await page.getAnnotations({ intent: "display" });
       for (const a of annotations) {
@@ -88,6 +121,7 @@ async function renderDocument() {
       height: base.height,
       imageUrl: canvas.toDataURL("image/jpeg", 0.85),
       links,
+      text,
     });
   }
   return pages;
@@ -97,6 +131,29 @@ function resolveTargetPage(hotspot) {
   if (hotspot.action && hotspot.action.type === "page") return hotspot.action.targetPage;
   if (hotspot.action && hotspot.action.type === "menu") return state.config.menuPage;
   return null;
+}
+
+function playPageSound() {
+  if (!state.config.theme || !state.config.theme.sound) return;
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const context = new AudioContextClass();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(210, context.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(95, context.currentTime + 0.09);
+    gain.gain.setValueAtTime(0.025, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.11);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.11);
+    oscillator.onended = () => context.close();
+  } catch {
+    /* El sonido es opcional. */
+  }
 }
 
 function buildPageElement(page) {
@@ -141,6 +198,12 @@ function buildPageElement(page) {
       node.textContent = glyphs[preset] || "●";
     }
     node.setAttribute("aria-label", hotspot.label || "Abrir hipervínculo");
+    const style = hotspot.style || {};
+    if (style.background) node.style.background = style.background;
+    else if (state.config.theme && state.config.theme.accent) node.style.background = state.config.theme.accent;
+    if (style.color) node.style.color = style.color;
+    if (typeof style.radius === "number") node.style.borderRadius = style.radius + "px";
+    if (style.animation && style.animation !== "none") node.style.animation = "fb-" + style.animation + " 1.8s ease-in-out infinite";
   };
 
   for (const link of page.links) {
@@ -172,6 +235,10 @@ function buildPageElement(page) {
       a.target = "_blank";
       a.rel = "noopener noreferrer";
       a.dataset.fbAction = "url";
+    } else if (hotspot.action && (hotspot.action.type === "popup" || hotspot.action.type === "media")) {
+      a.href = "#interactive";
+      a.dataset.fbAction = "interactive";
+      a.dataset.fbPayload = JSON.stringify(hotspot.action);
     }
     decorateButton(a, hotspot);
     place(
@@ -257,6 +324,7 @@ function buildBook() {
   flip.on("flip", (e) => {
     state.page = e.data + 1;
     el("page").value = String(state.page);
+    playPageSound();
   });
   state.flip = flip;
 }
@@ -300,6 +368,24 @@ function buildBookmarks() {
   }
 }
 
+function buildSearch(value) {
+  const list = el("search-results");
+  list.innerHTML = "";
+  const query = String(value || "").trim().toLocaleLowerCase();
+  if (query.length < 2) return;
+  for (const page of state.pages) {
+    const text = String(page.text || "");
+    if (!text.toLocaleLowerCase().includes(query)) continue;
+    const li = document.createElement("li");
+    const button = document.createElement("button");
+    button.textContent = "Página " + page.number + " · " + text.slice(0, 90);
+    button.addEventListener("click", () => goTo(page.number));
+    li.appendChild(button);
+    list.appendChild(li);
+  }
+  el("index-panel").hidden = false;
+}
+
 function wireControls() {
   el("prev").addEventListener("click", () => goTo(state.page - 1));
   el("next").addEventListener("click", () => goTo(state.page + 1));
@@ -322,6 +408,7 @@ function wireControls() {
     panel.hidden = !panel.hidden;
     buildBook();
   });
+  el("search").addEventListener("input", (event) => buildSearch(event.target.value));
 
   document.addEventListener("keydown", (event) => {
     if (event.target instanceof HTMLInputElement) return;
@@ -368,6 +455,10 @@ function wireControls() {
         goTo(state.page + Number(target.dataset.fbDelta || 0));
         return;
       }
+      if (target.dataset.fbAction === "interactive") {
+        try { showInteractive(JSON.parse(target.dataset.fbPayload || "{}")); } catch (error) { console.warn(error); }
+        return;
+      }
       const href = target.getAttribute("href");
       if (href) window.open(href, "_blank", "noopener,noreferrer");
     },
@@ -395,6 +486,7 @@ async function boot() {
     state.config = {
       menuPage: Number(config.menuPage) || 1,
       hotspots: Array.isArray(config.hotspots) ? config.hotspots : [],
+      theme: config.theme || {},
     };
     state.bookmarks = Array.isArray(bookmarks) ? bookmarks : [];
     state.pages = await renderDocument();
@@ -402,6 +494,7 @@ async function boot() {
     el("count").textContent = "/ " + state.pages.length;
     el("page").value = "1";
     buildBookmarks();
+    if (state.config.theme.background) document.querySelector(".stage").style.background = state.config.theme.background;
     buildBook();
     applyZoom();
     wireControls();

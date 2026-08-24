@@ -14,6 +14,7 @@ interface StageProps {
   zoom: number;
   onPageChange: (page: number) => void;
   handleRef: Ref<FlipbookHandle>;
+  theme?: { background?: string; accent?: string; sound?: boolean };
 }
 
 type PageFlipInstance = {
@@ -25,7 +26,50 @@ type PageFlipInstance = {
   getCurrentPageIndex: () => number;
 };
 
-function buildPageElement(page: FlipbookPage, hotspots: Hotspot[], menuPage: number): HTMLElement {
+function showInteractiveOverlay(action: Hotspot["action"]) {
+  if (action.type !== "popup" && action.type !== "media") return;
+  const backdrop = document.createElement("div");
+  backdrop.style.cssText =
+    "position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.72);display:grid;place-items:center;padding:24px;";
+  const panel = document.createElement("section");
+  panel.style.cssText =
+    "position:relative;width:min(760px,94vw);max-height:88vh;overflow:auto;border-radius:22px;background:white;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,.4);color:#111827;";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.textContent = "×";
+  close.setAttribute("aria-label", "Cerrar");
+  close.style.cssText =
+    "position:absolute;right:12px;top:8px;border:0;background:transparent;font-size:30px;cursor:pointer;";
+  close.onclick = () => backdrop.remove();
+  panel.appendChild(close);
+  const title = document.createElement("h2");
+  title.textContent = action.title || (action.type === "popup" ? "Información" : "Multimedia");
+  title.style.cssText = "margin:0 36px 16px 0;font:700 22px system-ui;";
+  panel.appendChild(title);
+  if (action.type === "popup") {
+    const text = document.createElement("p");
+    text.textContent = action.text;
+    text.style.cssText = "white-space:pre-wrap;line-height:1.6;margin:0;";
+    panel.appendChild(text);
+  } else {
+    const media = document.createElement(action.mediaType === "image" ? "img" : action.mediaType);
+    media.setAttribute("src", action.src);
+    media.setAttribute("controls", "");
+    media.style.cssText =
+      "display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:12px;";
+    panel.appendChild(media);
+  }
+  backdrop.onclick = (event) => event.target === backdrop && backdrop.remove();
+  backdrop.appendChild(panel);
+  document.body.appendChild(backdrop);
+}
+
+function buildPageElement(
+  page: FlipbookPage,
+  hotspots: Hotspot[],
+  menuPage: number,
+  accent?: string,
+): HTMLElement {
   const wrapper = document.createElement("div");
   wrapper.className = "page-container relative overflow-hidden bg-white";
   wrapper.dataset["pageNumber"] = String(page.number);
@@ -68,8 +112,17 @@ function buildPageElement(page: FlipbookPage, hotspots: Hotspot[], menuPage: num
       (hotspot.height / page.height) * 100
     }%;cursor:pointer;`;
     el.title = hotspot.label ?? "";
+    if (hotspot.style) {
+      if (hotspot.style.background) el.style.background = hotspot.style.background;
+      if (hotspot.style.color) el.style.color = hotspot.style.color;
+      if (typeof hotspot.style.radius === "number")
+        el.style.borderRadius = `${hotspot.style.radius}px`;
+      if (hotspot.style.animation && hotspot.style.animation !== "none")
+        el.style.animation = `fb-${hotspot.style.animation} 1.8s ease-in-out infinite`;
+    }
     if (hotspot.buttonPreset) {
       el.className = `flipbook-3d-button${hotspot.buttonPreset.startsWith("arrow-") ? " flipbook-3d-arrow" : ""}`;
+      if (!hotspot.style?.background && accent) el.style.background = accent;
       el.style.borderRadius = hotspot.buttonPreset === "circle" ? "999px" : "14px";
       if (hotspot.buttonPreset === "ad-mobility") {
         el.classList.add("flipbook-3d-brand");
@@ -92,6 +145,10 @@ function buildPageElement(page: FlipbookPage, hotspots: Hotspot[], menuPage: num
       el.target = "_blank";
       el.rel = "noopener noreferrer";
       el.dataset["fbAction"] = "url";
+    } else if (hotspot.action.type === "popup" || hotspot.action.type === "media") {
+      el.href = "#interactive";
+      el.dataset["fbAction"] = "interactive";
+      el.dataset["fbPayload"] = JSON.stringify(hotspot.action);
     }
     overlay.appendChild(el);
   }
@@ -123,6 +180,7 @@ export function FlipbookStage({
   zoom,
   onPageChange,
   handleRef,
+  theme,
 }: StageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const flipRef = useRef<PageFlipInstance | null>(null);
@@ -190,6 +248,7 @@ export function FlipbookStage({
             page,
             hotspots.filter((h) => h.page === page.number),
             menuPage,
+            theme?.accent,
           );
           el.style.width = `${Math.round(single ? width : width / 2)}px`;
           el.style.height = `${Math.round(height)}px`;
@@ -225,6 +284,29 @@ export function FlipbookStage({
         instance.on("flip", (e) => {
           pageRef.current = e.data + 1;
           onPageChange(e.data + 1);
+          if (theme?.sound) {
+            try {
+              const AudioContextClass =
+                window.AudioContext ||
+                (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+                  .webkitAudioContext;
+              if (AudioContextClass) {
+                const audio = new AudioContextClass();
+                const oscillator = audio.createOscillator();
+                const gain = audio.createGain();
+                oscillator.frequency.setValueAtTime(150, audio.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(70, audio.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.025, audio.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.09);
+                oscillator.connect(gain).connect(audio.destination);
+                oscillator.start();
+                oscillator.stop(audio.currentTime + 0.1);
+                window.setTimeout(() => void audio.close(), 180);
+              }
+            } catch {
+              /* audio opcional */
+            }
+          }
         });
       };
 
@@ -249,7 +331,7 @@ export function FlipbookStage({
       flipRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pages, hotspots, menuPage]);
+  }, [pages, hotspots, menuPage, theme?.sound]);
 
   // Clic en enlaces: navegación interna con la API de StPageFlip; URLs en pestaña nueva.
   useEffect(() => {
@@ -309,6 +391,16 @@ export function FlipbookStage({
         turn(target);
         return;
       }
+      if (target.dataset["fbAction"] === "interactive") {
+        try {
+          showInteractiveOverlay(
+            JSON.parse(target.dataset["fbPayload"] ?? "{}") as Hotspot["action"],
+          );
+        } catch {
+          /* configuración dañada: no hacemos nada */
+        }
+        return;
+      }
       const href = target.getAttribute("href");
       if (href) window.open(href, "_blank", "noopener,noreferrer");
     };
@@ -325,7 +417,10 @@ export function FlipbookStage({
   }, [onPageChange, pages.length]);
 
   return (
-    <div className="flex flex-1 items-center justify-center overflow-auto p-3">
+    <div
+      className="flex flex-1 items-center justify-center overflow-auto p-3"
+      style={{ background: theme?.background }}
+    >
       <div
         ref={hostRef}
         className="shadow-2xl"

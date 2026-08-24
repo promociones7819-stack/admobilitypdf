@@ -96,13 +96,15 @@ export async function buildSingleFlipbookHtml(options: {
         height: page.height,
         image,
         links: page.links,
+        text: page.text,
       };
     }),
   );
   const data = {
     menuPage: options.config.menuPage,
     hotspots: options.config.hotspots,
-    bookmarks: options.outline,
+    bookmarks: options.config.outline ?? options.outline,
+    theme: options.config.theme ?? {},
     brandImage,
     pages,
   };
@@ -131,7 +133,7 @@ export async function buildFlipbookZip(options: {
   folder.file("index.html", indexHtml.replaceAll("__TITLE__", escapeHtml(title)));
   folder.file("document.pdf", await options.file.arrayBuffer());
   folder.file("hotspots.json", JSON.stringify(options.config, null, 2));
-  folder.file("bookmarks.json", JSON.stringify(options.outline, null, 2));
+  folder.file("bookmarks.json", JSON.stringify(options.config.outline ?? options.outline, null, 2));
   folder.file("README.txt", readme);
   folder.file("LEEME.txt", leeme);
   folder.file("servidor.py", serverPy, { unixPermissions: "755" });

@@ -14,6 +14,8 @@ export type AnnotationKind =
   | "ellipse"
   | "image"
   | "signature"
+  /** Permanent redaction. Export rasterizes the document so covered content is removed. */
+  | "redact"
   /** Study strip ("Tira"): hides content until revealed. Never alters the PDF. */
   | "studyCover";
 
@@ -136,6 +138,7 @@ export const TOOL_LABELS: Record<ToolId, string> = {
   ellipse: "Elipse",
   image: "Imagen",
   signature: "Firma",
+  redact: "Censura segura",
   studyCover: "Tira",
 };
 
@@ -159,6 +162,7 @@ export function styleDefaultsFor(kind: AnnotationKind, style: AnnotationStyle) {
       strokeWidth: style.highlightWidth,
     };
   if (kind === "studyCover") return { color: "#1f2937", opacity: 1, filled: true, strokeWidth: 0 };
+  if (kind === "redact") return { color: "#000000", opacity: 1, filled: true, strokeWidth: 0 };
   if (kind === "underline" || kind === "strike")
     return { color: style.color, opacity: 1, filled: false, strokeWidth: style.strokeWidth };
   return {

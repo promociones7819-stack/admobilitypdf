@@ -6,6 +6,7 @@ export interface LocalProject {
   name: string;
   directory: FileSystemDirectoryHandle;
   updatedAt: number;
+  archived?: boolean;
 }
 
 interface ProjectDb extends DBSchema {
@@ -58,6 +59,24 @@ export async function rememberProject(project: LocalProject): Promise<void> {
   const db = await dbPromise;
   await db.put("projects", project);
   await db.put("settings", { key: "last-project", value: project.id });
+}
+
+export async function renameProject(project: LocalProject, name: string): Promise<LocalProject> {
+  const next = { ...project, name: name.trim() || project.name, updatedAt: Date.now() };
+  await rememberProject(next);
+  if (activeProject?.id === project.id) activeProject = next;
+  window.dispatchEvent(new CustomEvent("pdf-maestro:project-active"));
+  return next;
+}
+
+export async function setProjectArchived(
+  project: LocalProject,
+  archived: boolean,
+): Promise<LocalProject> {
+  const next = { ...project, archived, updatedAt: Date.now() };
+  await rememberProject(next);
+  if (archived && activeProject?.id === project.id) activeProject = null;
+  return next;
 }
 
 export async function chooseProjectFolder(): Promise<LocalProject> {
@@ -122,6 +141,13 @@ interface ProjectStateFile {
     height: number;
     file: string;
   }>;
+}
+
+export interface ProjectVersionInfo {
+  file: string;
+  label: string;
+  updatedAt: number;
+  documentName: string;
 }
 
 async function writeFileIfChanged(
@@ -259,6 +285,144 @@ export async function getActiveProjectWorkspaceInfo(): Promise<{
     const state = JSON.parse(await (await stateHandle.getFile()).text()) as ProjectStateFile;
     return { fileName: state.fileName, updatedAt: state.updatedAt };
   } catch {
+    return null;
+  }
+}
+
+export async function saveProjectVersion(
+  snapshot: WorkspaceSnapshot,
+  label: string,
+): Promise<ProjectVersionInfo | null> {
+  const project = activeProject;
+  if (!project || !(await hasWritePermission(project.directory))) return null;
+  try {
+    // Ensure the sources and images referenced by the version exist.
+    await saveWorkspaceToActiveProject(snapshot);
+    const root = await project.directory.getDirectoryHandle("Proyecto", { create: true });
+    const versions = await root.getDirectoryHandle("Versiones", { create: true });
+    const sources = snapshot.sources.map((source) => ({
+      id: source.id,
+      name: source.name,
+      pageCount: source.pageCount,
+      file: safeName(`${source.id}-${source.name}`),
+    }));
+    const images = snapshot.images.map((image) => ({
+      id: image.id,
+      mime: image.mime,
+      width: image.width,
+      height: image.height,
+      file: safeName(`${image.id}.${image.mime === "image/png" ? "png" : "jpg"}`),
+    }));
+    const state: ProjectStateFile & { versionLabel: string } = {
+      version: 1,
+      updatedAt: Date.now(),
+      fileName: snapshot.fileName,
+      pages: snapshot.pages,
+      annotations: snapshot.annotations,
+      coverExport: snapshot.coverExport,
+      sources,
+      images,
+      versionLabel: label.trim() || "Versión manual",
+    };
+    const file = `${new Date(state.updatedAt).toISOString().replace(/[:.]/g, "-")}.json`;
+    await writeFile(versions, file, JSON.stringify(state, null, 2));
+    return {
+      file,
+      label: state.versionLabel,
+      updatedAt: state.updatedAt,
+      documentName: state.fileName,
+    };
+  } catch (error) {
+    console.warn("[projects] no se pudo guardar la versión", error);
+    return null;
+  }
+}
+
+export async function listProjectVersions(): Promise<ProjectVersionInfo[]> {
+  const project = activeProject;
+  if (!project || !(await hasWritePermission(project.directory))) return [];
+  try {
+    const root = await project.directory.getDirectoryHandle("Proyecto");
+    const versions = await root.getDirectoryHandle("Versiones");
+    const result: ProjectVersionInfo[] = [];
+    for await (const [file, handle] of (
+      versions as FileSystemDirectoryHandle & {
+        entries: () => AsyncIterableIterator<[string, FileSystemHandle]>;
+      }
+    ).entries()) {
+      if (handle.kind !== "file" || !file.endsWith(".json")) continue;
+      try {
+        const state = JSON.parse(
+          await (handle as FileSystemFileHandle).getFile().then((value) => value.text()),
+        ) as ProjectStateFile & { versionLabel?: string };
+        result.push({
+          file,
+          label: state.versionLabel ?? "Versión manual",
+          updatedAt: state.updatedAt,
+          documentName: state.fileName,
+        });
+      } catch {
+        /* omite versiones dañadas */
+      }
+    }
+    return result.sort((a, b) => b.updatedAt - a.updatedAt);
+  } catch {
+    return [];
+  }
+}
+
+export async function loadProjectVersion(fileName: string): Promise<WorkspaceSnapshot | null> {
+  const project = activeProject;
+  if (!project || !(await hasWritePermission(project.directory))) return null;
+  try {
+    const root = await project.directory.getDirectoryHandle("Proyecto");
+    const versions = await root.getDirectoryHandle("Versiones");
+    const state = JSON.parse(
+      await (
+        await versions.getFileHandle(safeName(fileName))
+      )
+        .getFile()
+        .then((file) => file.text()),
+    ) as ProjectStateFile;
+    const sourcesFolder = await root.getDirectoryHandle("Fuentes");
+    const sources = await Promise.all(
+      state.sources.map(async (source) => ({
+        id: source.id,
+        name: source.name,
+        pageCount: source.pageCount,
+        bytes: await (
+          await sourcesFolder.getFileHandle(source.file)
+        )
+          .getFile()
+          .then((file) => file.arrayBuffer()),
+      })),
+    );
+    const imagesFolder = state.images.length ? await root.getDirectoryHandle("Imagenes") : null;
+    const images = await Promise.all(
+      state.images.map(async (image) => ({
+        id: image.id,
+        mime: image.mime,
+        width: image.width,
+        height: image.height,
+        bytes: await (
+          await imagesFolder!.getFileHandle(image.file)
+        )
+          .getFile()
+          .then((file) => file.arrayBuffer()),
+      })),
+    );
+    return {
+      version: 1,
+      updatedAt: state.updatedAt,
+      fileName: state.fileName,
+      pages: state.pages,
+      annotations: state.annotations,
+      coverExport: state.coverExport,
+      sources,
+      images,
+    };
+  } catch (error) {
+    console.warn("[projects] versión no recuperable", error);
     return null;
   }
 }

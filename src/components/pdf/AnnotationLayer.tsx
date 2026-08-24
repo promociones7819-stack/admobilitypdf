@@ -312,6 +312,15 @@ export function AnnotationLayer({
 
     const content = (() => {
       switch (merged.kind) {
+        case "redact":
+          return (
+            <div
+              className="flex size-full items-center justify-center bg-black text-[10px] font-bold uppercase tracking-widest text-white"
+              title="La información cubierta se eliminará al exportar"
+            >
+              Censurado
+            </div>
+          );
         case "studyCover":
           return (
             <div
