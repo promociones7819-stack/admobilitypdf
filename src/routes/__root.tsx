@@ -109,6 +109,8 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="es">
       <head>
         <HeadContent />
+        <link rel="manifest" href="https://progressier.app/xaLBVovTNyhzYOImaBLJ/progressier.json" />
+        <script defer src="https://progressier.app/xaLBVovTNyhzYOImaBLJ/script.js"></script>
       </head>
       <body>
         {children}
