@@ -10,6 +10,7 @@ import {
   Copy,
   Download,
   FileArchive,
+  FileCode2,
   FileJson,
   Home,
   List,
@@ -58,7 +59,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { buildFlipbookZip, publicationName } from "@/lib/flipbook/publish";
+import {
+  buildFlipbookZip,
+  buildSingleFlipbookHtml,
+  publicationName,
+} from "@/lib/flipbook/publish";
 import { loadFlipbookDocument, type FlipbookDocument } from "@/lib/flipbook/document";
 import {
   documentKey,
@@ -296,6 +301,33 @@ export function FlipbookWorkspace({
     }
   };
 
+  /** Exporta un único HTML que se abre directamente con doble clic. */
+  const exportSingleHtml = async () => {
+    if (!doc) {
+      toast.error("Abre un PDF para poder exportar el flipbook.");
+      return;
+    }
+    setPublishing(true);
+    try {
+      const html = await buildSingleFlipbookHtml({
+        docName,
+        pages: doc.pages,
+        config,
+        outline: doc.outline,
+      });
+      await saveBlob(
+        new Blob([html], { type: "text/html;charset=utf-8" }),
+        `${publicationName(docName)}-flipbook.html`,
+      );
+      toast.success("Flipbook HTML listo: ábrelo con doble clic");
+    } catch (error) {
+      console.error("[flipbook] exportación HTML fallida", error);
+      toast.error("No se ha podido generar el HTML del flipbook.");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
 
   const importConfig = async (file: File) => {
     try {
@@ -507,11 +539,21 @@ export function FlipbookWorkspace({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" disabled={publishing}>
                 <Download className="mr-2 size-4" />
-                {publishing ? "Generando ZIP…" : "Exportar"}
+                {publishing ? "Generando…" : "Exportar"}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-72">
               <DropdownMenuLabel>Exportar</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => void exportSingleHtml()}>
+                <FileCode2 className="mr-2 size-4" />
+                <span className="flex flex-col">
+                  <span>HTML único para Mac (.html)</span>
+                  <span className="text-xs text-muted-foreground">
+                    Se abre con doble clic, sin instalar nada
+                  </span>
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => void exportPublication()}>
                 <FileArchive className="mr-2 size-4" />
                 <span className="flex flex-col">

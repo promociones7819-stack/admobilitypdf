@@ -21,6 +21,8 @@ async function fetchLib(url: string): Promise<ArrayBuffer> {
 }
 
 import indexHtml from "./standalone/index.html.txt?raw";
+import singleHtml from "./standalone/single.html.txt?raw";
+import singleViewerJs from "./standalone/single-viewer.js.txt?raw";
 import viewerJs from "./standalone/viewer.js.txt?raw";
 import stylesCss from "./standalone/styles.css.txt?raw";
 import readme from "./standalone/README.txt?raw";
@@ -29,7 +31,7 @@ import serverPy from "./standalone/servidor.py.txt?raw";
 import startWin from "./standalone/iniciar-windows.bat.txt?raw";
 import startUnix from "./standalone/iniciar-mac-linux.command.txt?raw";
 
-import type { OutlineEntry } from "./document";
+import type { FlipbookPage, OutlineEntry } from "./document";
 import type { FlipbookConfig } from "./hotspots";
 
 
@@ -41,9 +43,77 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function escapeJsonForHtml(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+function escapeInlineScript(value: string): string {
+  return value.replace(/<\/script/gi, "<\\/script");
+}
+
+function arrayBufferToDataUrl(buffer: ArrayBuffer, mimeType: string): Promise<string> {
+  return blobToDataUrl(new Blob([buffer], { type: mimeType }));
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("No se pudo incrustar el recurso"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export function publicationName(docName: string): string {
   const base = docName.replace(/\.pdf$/i, "").trim() || "flipbook";
   return base.replace(/[^\w\-. ]+/g, "_");
+}
+
+/** Genera un flipbook que funciona con doble clic, sin servidor ni archivos auxiliares. */
+export async function buildSingleFlipbookHtml(options: {
+  docName: string;
+  pages: FlipbookPage[];
+  config: FlipbookConfig;
+  outline: OutlineEntry[];
+}): Promise<string> {
+  const title = publicationName(options.docName);
+  const [pageFlipBuffer, brandBuffer] = await Promise.all([
+    fetchLib("/flipbook-libs/page-flip.browser.js"),
+    fetchLib("/brand/ad-mobility.png"),
+  ]);
+  const pageFlipJs = new TextDecoder().decode(pageFlipBuffer);
+  const brandImage = await arrayBufferToDataUrl(brandBuffer, "image/png");
+  const pages = await Promise.all(
+    options.pages.map(async (page) => {
+      const image = page.imageUrl.startsWith("data:")
+        ? page.imageUrl
+        : await blobToDataUrl(await (await fetch(page.imageUrl)).blob());
+      return {
+        number: page.number,
+        width: page.width,
+        height: page.height,
+        image,
+        links: page.links,
+      };
+    }),
+  );
+  const data = {
+    menuPage: options.config.menuPage,
+    hotspots: options.config.hotspots,
+    bookmarks: options.outline,
+    brandImage,
+    pages,
+  };
+
+  return singleHtml
+    .replaceAll("__TITLE__", escapeHtml(title))
+    .replace("__CSS__", stylesCss)
+    .replace("__DATA__", escapeJsonForHtml(data))
+    .replace("__PAGEFLIP__", escapeInlineScript(pageFlipJs))
+    .replace("__VIEWER__", escapeInlineScript(singleViewerJs));
 }
 
 export async function buildFlipbookZip(options: {
@@ -81,5 +151,5 @@ export async function buildFlipbookZip(options: {
     libs.file(lib.name, sources[index]!);
   });
 
-  return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+  return zip.generateAsync({ type: "blob", compression: "DEFLATE", platform: "UNIX" });
 }

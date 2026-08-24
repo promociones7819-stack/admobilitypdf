@@ -7,6 +7,7 @@
     menuPage: Number(data.menuPage) || 1,
     hotspots: Array.isArray(data.hotspots) ? data.hotspots : [],
     bookmarks: Array.isArray(data.bookmarks) ? data.bookmarks : [],
+    brandImage: data.brandImage || "",
     flip: null,
     page: 1,
     zoom: 1,
@@ -38,7 +39,7 @@
     if (preset === "ad-mobility") {
       node.classList.add("hotspot-3d-brand");
       var image = document.createElement("img");
-      image.src = "assets/ad-mobility.png";
+      image.src = state.brandImage;
       image.alt = "AD Mobility";
       node.appendChild(image);
     } else {
