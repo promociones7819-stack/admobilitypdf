@@ -170,13 +170,26 @@ interface EditorContextValue {
   tool: ToolId;
   style: AnnotationStyle;
   selectedAnnotationId: string | null;
+  selectedAnnotationIds: string[];
   setTool: (tool: ToolId) => void;
   setStyle: (patch: Partial<AnnotationStyle>) => void;
   setSelectedAnnotation: (id: string | null) => void;
+  setSelectedAnnotations: (ids: string[]) => void;
+  toggleAnnotationSelection: (id: string, additive?: boolean) => void;
   addAnnotation: (annotation: Annotation) => void;
   updateAnnotation: (id: string, patch: Partial<Annotation>) => void;
+  updateAnnotations: (ids: string[], patch: Partial<Annotation>) => void;
+  moveAnnotations: (ids: string[], dx: number, dy: number) => void;
   deleteAnnotation: (id: string) => void;
+  deleteAnnotations: (ids: string[]) => void;
   duplicateAnnotation: (id: string) => void;
+  reorderAnnotation: (id: string, direction: "front" | "forward" | "backward" | "back") => void;
+  alignAnnotations: (
+    ids: string[],
+    mode: "left" | "center" | "right" | "top" | "middle" | "bottom" | "horizontal" | "vertical",
+  ) => void;
+  groupAnnotations: (ids: string[]) => void;
+  ungroupAnnotations: (ids: string[]) => void;
   clearPageAnnotations: (pageId: string) => void;
   toggleCover: (id: string) => void;
   setCoversRevealed: (revealed: boolean, pageId?: string | null) => void;
@@ -236,7 +249,20 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
   } | null>(null);
   const [tool, setToolState] = useState<ToolId>("select");
   const [style, setStyleState] = useState<AnnotationStyle>(DEFAULT_STYLE);
-  const [selectedAnnotationId, setSelectedAnnotation] = useState<string | null>(null);
+  const [selectedAnnotationIds, setSelectedAnnotationIds] = useState<string[]>([]);
+  const selectedAnnotationId = selectedAnnotationIds[0] ?? null;
+  const setSelectedAnnotation = useCallback((id: string | null) => {
+    setSelectedAnnotationIds(id ? [id] : []);
+  }, []);
+  const setSelectedAnnotations = useCallback((ids: string[]) => {
+    setSelectedAnnotationIds([...new Set(ids)]);
+  }, []);
+  const toggleAnnotationSelection = useCallback((id: string, additive = false) => {
+    setSelectedAnnotationIds((current) => {
+      if (!additive) return [id];
+      return current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
+    });
+  }, []);
   const [studyMode, setStudyMode] = useState(false);
   const [coverExport, setCoverExport] = useState<CoverExportMode>("omit");
   const [autosaveState, setAutosaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -326,7 +352,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
         setBusy(false);
       }
     },
-    [dirty, resetHistory, sources],
+    [dirty, resetHistory, setSelectedAnnotation, sources],
   );
 
   const restoreRecovery = useCallback(async () => {
@@ -479,7 +505,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
         setBusy(false);
       }
     },
-    [dirty, resetHistory, sources],
+    [dirty, resetHistory, setSelectedAnnotation, sources],
   );
 
   const importFiles = useCallback(
@@ -553,7 +579,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       setSelectionState([blankPage.id]);
       setSelectedAnnotation(null);
     },
-    [activePageId, commit, pages, sources],
+    [activePageId, commit, pages, setSelectedAnnotation, sources],
   );
 
   const closeDocument = useCallback(() => {
@@ -572,7 +598,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     const clear = autosaveQueue.current.catch(() => undefined).then(clearRecovery);
     autosaveQueue.current = clear;
     void clear;
-  }, [dirty, resetHistory, sources]);
+  }, [dirty, resetHistory, setSelectedAnnotation, sources]);
 
   const deletePages = useCallback(
     (ids: string[]) => {
@@ -590,7 +616,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       setSelectionState(nextActive ? [nextActive] : []);
       setSelectedAnnotation(null);
     },
-    [activePageId, commit, pages],
+    [activePageId, commit, pages, setSelectedAnnotation],
   );
 
   const duplicatePages = useCallback(
@@ -656,7 +682,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
         ...current,
         annotations: [...current.annotations, annotation],
       }));
-      setSelectedAnnotation(annotation.id);
+      setSelectedAnnotationIds([annotation.id]);
     },
     [commit],
   );
@@ -671,15 +697,159 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const updateAnnotations = useCallback(
+    (ids: string[], patch: Partial<Annotation>) => {
+      if (!ids.length) return;
+      const selected = new Set(ids);
+      commit((current) => ({
+        ...current,
+        annotations: current.annotations.map((a) => (selected.has(a.id) ? { ...a, ...patch } : a)),
+      }));
+    },
+    [commit],
+  );
+
+  const moveAnnotations = useCallback(
+    (ids: string[], dx: number, dy: number) => {
+      if (!ids.length || (!dx && !dy)) return;
+      const selected = new Set(ids);
+      commit((current) => ({
+        ...current,
+        annotations: current.annotations.map((item) => {
+          if (!selected.has(item.id) || item.locked) return item;
+          return {
+            ...item,
+            x: Math.max(0, Math.min(1 - item.width, item.x + dx)),
+            y: Math.max(0, Math.min(1 - item.height, item.y + dy)),
+          };
+        }),
+      }));
+    },
+    [commit],
+  );
+
   const deleteAnnotation = useCallback(
     (id: string) => {
       commit((current) => ({
         ...current,
         annotations: current.annotations.filter((a) => a.id !== id),
       }));
-      setSelectedAnnotation(null);
+      setSelectedAnnotationIds([]);
     },
     [commit],
+  );
+
+  const deleteAnnotations = useCallback(
+    (ids: string[]) => {
+      if (!ids.length) return;
+      const selected = new Set(ids);
+      commit((current) => ({
+        ...current,
+        annotations: current.annotations.filter((a) => !selected.has(a.id)),
+      }));
+      setSelectedAnnotationIds([]);
+    },
+    [commit],
+  );
+
+  const reorderAnnotation = useCallback(
+    (id: string, direction: "front" | "forward" | "backward" | "back") => {
+      commit((current) => {
+        const index = current.annotations.findIndex((item) => item.id === id);
+        if (index < 0) return current;
+        const item = current.annotations[index]!;
+        const pageIndexes = current.annotations
+          .map((entry, at) => (entry.pageId === item.pageId ? at : -1))
+          .filter((at) => at >= 0);
+        const position = pageIndexes.indexOf(index);
+        const targetPosition =
+          direction === "front"
+            ? pageIndexes.length - 1
+            : direction === "back"
+              ? 0
+              : Math.max(
+                  0,
+                  Math.min(pageIndexes.length - 1, position + (direction === "forward" ? 1 : -1)),
+                );
+        const targetIndex = pageIndexes[targetPosition];
+        if (targetIndex === undefined || targetIndex === index) return current;
+        const next = [...current.annotations];
+        next.splice(index, 1);
+        next.splice(targetIndex, 0, item);
+        return { ...current, annotations: next };
+      });
+    },
+    [commit],
+  );
+
+  const alignAnnotations = useCallback(
+    (
+      ids: string[],
+      mode: "left" | "center" | "right" | "top" | "middle" | "bottom" | "horizontal" | "vertical",
+    ) => {
+      if (ids.length < 2) return;
+      const selected = new Set(ids);
+      commit((current) => {
+        const items = current.annotations.filter((item) => selected.has(item.id) && !item.locked);
+        if (items.length < 2) return current;
+        const minX = Math.min(...items.map((item) => item.x));
+        const maxX = Math.max(...items.map((item) => item.x + item.width));
+        const minY = Math.min(...items.map((item) => item.y));
+        const maxY = Math.max(...items.map((item) => item.y + item.height));
+        const ordered =
+          mode === "horizontal"
+            ? [...items].sort((a, b) => a.x - b.x)
+            : [...items].sort((a, b) => a.y - b.y);
+        const distributed = new Map<string, Partial<Annotation>>();
+        if (mode === "horizontal" && ordered.length > 2) {
+          const total = ordered.reduce((sum, item) => sum + item.width, 0);
+          const gap = (maxX - minX - total) / (ordered.length - 1);
+          let cursor = minX;
+          for (const item of ordered) {
+            distributed.set(item.id, { x: cursor });
+            cursor += item.width + gap;
+          }
+        } else if (mode === "vertical" && ordered.length > 2) {
+          const total = ordered.reduce((sum, item) => sum + item.height, 0);
+          const gap = (maxY - minY - total) / (ordered.length - 1);
+          let cursor = minY;
+          for (const item of ordered) {
+            distributed.set(item.id, { y: cursor });
+            cursor += item.height + gap;
+          }
+        }
+        return {
+          ...current,
+          annotations: current.annotations.map((item) => {
+            if (!selected.has(item.id) || item.locked) return item;
+            if (mode === "left") return { ...item, x: minX };
+            if (mode === "center") return { ...item, x: (minX + maxX - item.width) / 2 };
+            if (mode === "right") return { ...item, x: maxX - item.width };
+            if (mode === "top") return { ...item, y: minY };
+            if (mode === "middle") return { ...item, y: (minY + maxY - item.height) / 2 };
+            if (mode === "bottom") return { ...item, y: maxY - item.height };
+            return { ...item, ...(distributed.get(item.id) ?? {}) };
+          }),
+        };
+      });
+    },
+    [commit],
+  );
+
+  const groupAnnotations = useCallback(
+    (ids: string[]) => {
+      if (ids.length < 2) return;
+      const groupId = makeId("group");
+      updateAnnotations(ids, { groupId });
+    },
+    [updateAnnotations],
+  );
+
+  const ungroupAnnotations = useCallback(
+    (ids: string[]) => {
+      updateAnnotations(ids, { groupId: undefined });
+    },
+    [updateAnnotations],
   );
 
   const duplicateAnnotation = useCallback(
@@ -689,6 +859,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       const copy: Annotation = {
         ...source,
         id: makeId("ann"),
+        groupId: undefined,
         x: Math.min(1 - source.width, source.x + 0.02),
         y: Math.min(1 - source.height, source.y + 0.02),
         ...(source.points ? { points: source.points.map((point) => ({ ...point })) } : {}),
@@ -706,7 +877,7 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       }));
       setSelectedAnnotation(null);
     },
-    [commit],
+    [commit, setSelectedAnnotation],
   );
 
   /** Reveals/hides one study strip. Undoable like any other change. */
@@ -741,11 +912,11 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
   const undo = useCallback(() => {
     setSelectedAnnotation(null);
     setHistoryIndex((i) => Math.max(0, i - 1));
-  }, []);
+  }, [setSelectedAnnotation]);
   const redo = useCallback(() => {
     setSelectedAnnotation(null);
     setHistoryIndex((i) => Math.min(history.length - 1, i + 1));
-  }, [history.length]);
+  }, [history.length, setSelectedAnnotation]);
 
   const download = useCallback(async () => {
     setBusy(true);
@@ -870,10 +1041,13 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
     setActivePageId(id);
   }, []);
 
-  const setTool = useCallback((next: ToolId) => {
-    setToolState(next);
-    if (next !== "select") setSelectedAnnotation(null);
-  }, []);
+  const setTool = useCallback(
+    (next: ToolId) => {
+      setToolState(next);
+      if (next !== "select") setSelectedAnnotation(null);
+    },
+    [setSelectedAnnotation],
+  );
 
   const setStyle = useCallback((patch: Partial<AnnotationStyle>) => {
     setStyleState((prev) => ({ ...prev, ...patch }));
@@ -896,13 +1070,23 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       tool,
       style,
       selectedAnnotationId,
+      selectedAnnotationIds,
       setTool,
       setStyle,
       setSelectedAnnotation,
+      setSelectedAnnotations,
+      toggleAnnotationSelection,
       addAnnotation,
       updateAnnotation,
+      updateAnnotations,
+      moveAnnotations,
       deleteAnnotation,
+      deleteAnnotations,
       duplicateAnnotation,
+      reorderAnnotation,
+      alignAnnotations,
+      groupAnnotations,
+      ungroupAnnotations,
       clearPageAnnotations,
       toggleCover,
       setCoversRevealed,
@@ -960,7 +1144,12 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       closeDocument,
 
       deleteAnnotation,
+      deleteAnnotations,
       duplicateAnnotation,
+      reorderAnnotation,
+      alignAnnotations,
+      groupAnnotations,
+      ungroupAnnotations,
       deletePages,
       dirty,
       download,
@@ -990,15 +1179,21 @@ export function PdfEditorProvider({ children }: { children: ReactNode }) {
       restoreProjectVersion,
       rotatePages,
       selectedAnnotationId,
+      selectedAnnotationIds,
       selection,
+      setSelectedAnnotation,
+      setSelectedAnnotations,
       setStyle,
       setTool,
       sources,
       style,
       toggleSelection,
+      toggleAnnotationSelection,
       tool,
       undo,
       updateAnnotation,
+      updateAnnotations,
+      moveAnnotations,
       autosaveState,
     ],
   );

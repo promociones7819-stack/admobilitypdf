@@ -65,6 +65,14 @@ export interface Annotation {
   align?: TextAlign;
   /** Study strip state: false hides the content underneath. */
   revealed?: boolean;
+  /** Optional layer name shown in design mode. */
+  name?: string;
+  /** Hidden layers remain editable in the project but are not exported. */
+  hidden?: boolean;
+  /** Locked layers cannot be moved, resized or deleted from the canvas. */
+  locked?: boolean;
+  /** Objects with the same group id move and align together. */
+  groupId?: string | undefined;
 }
 
 export interface ImageAsset {

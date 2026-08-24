@@ -504,7 +504,7 @@ export async function buildPdf(
       target = copied;
     }
 
-    const pageAnnotations = annotations.filter((a) => a.pageId === entry.id);
+    const pageAnnotations = annotations.filter((a) => a.pageId === entry.id && !a.hidden);
     if (pageAnnotations.length === 0) continue;
 
     const { width: pageWidth, height: pageHeight } = target.getSize();

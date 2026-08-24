@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Layers3 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { usePdfEditor } from "@/lib/pdf/store";
@@ -11,6 +12,7 @@ import { AnnotationOptions } from "./AnnotationOptions";
 import { StatusBar } from "./StatusBar";
 import { TopBar } from "./TopBar";
 import { SearchDialog } from "./SearchDialog";
+import { DesignLayersPanel } from "./DesignLayersPanel";
 
 import { ThumbnailPanel } from "./ThumbnailPanel";
 import { zoomIn, zoomOut, type ZoomMode } from "./zoom";
@@ -31,12 +33,14 @@ export function Editor({
     annotations,
     activePageId,
     selectedAnnotationId,
+    selectedAnnotationIds,
     setActivePage,
     undo,
     redo,
     duplicatePages,
     duplicateAnnotation,
     addAnnotation,
+    moveAnnotations,
     selection,
     setTool,
   } = usePdfEditor();
@@ -44,6 +48,7 @@ export function Editor({
   const [effectiveScale, setEffectiveScale] = useState(1);
   const [thumbsOpen, setThumbsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [designMode, setDesignMode] = useState(false);
   const clipboardRef = useRef<Annotation | null>(null);
 
   useEffect(() => {
@@ -83,6 +88,7 @@ export function Editor({
         addAnnotation({
           ...structuredClone(source),
           id: makeId("ann"),
+          groupId: undefined,
           pageId: activePageId,
           x: Math.min(1 - source.width, source.x + 0.02),
           y: Math.min(1 - source.height, source.y + 0.02),
@@ -120,12 +126,23 @@ export function Editor({
         }
       }
       if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        if (selectedAnnotationIds.length) {
+          event.preventDefault();
+          const step = event.shiftKey ? 0.01 : 0.002;
+          moveAnnotations(selectedAnnotationIds, event.key === "ArrowRight" ? step : -step, 0);
+          return;
+        }
         const index = pages.findIndex((p) => p.id === activePageId);
         const next = pages[index + (event.key === "ArrowRight" ? 1 : -1)];
         if (next) {
           event.preventDefault();
           setActivePage(next.id);
         }
+      }
+      if ((event.key === "ArrowUp" || event.key === "ArrowDown") && selectedAnnotationIds.length) {
+        event.preventDefault();
+        const step = event.shiftKey ? 0.01 : 0.002;
+        moveAnnotations(selectedAnnotationIds, 0, event.key === "ArrowDown" ? step : -step);
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -138,9 +155,11 @@ export function Editor({
     duplicatePages,
     effectiveScale,
     pages,
+    moveAnnotations,
     redo,
     selection,
     selectedAnnotationId,
+    selectedAnnotationIds,
     setActivePage,
     setTool,
     undo,
@@ -164,7 +183,21 @@ export function Editor({
           <AnnotationRail />
           <div className="flex min-w-0 flex-1 flex-col">
             <AnnotationOptions />
-            <PageViewer zoom={zoom} onEffectiveScale={setEffectiveScale} />
+            <div className="relative flex min-h-0 flex-1">
+              <PageViewer zoom={zoom} onEffectiveScale={setEffectiveScale} />
+              {!designMode && (
+                <button
+                  onClick={() => {
+                    setDesignMode(true);
+                    setTool("select");
+                  }}
+                  className="absolute right-4 top-4 z-20 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card px-3 py-2 text-xs font-medium shadow-lg hover:bg-accent"
+                >
+                  <Layers3 className="size-4 text-primary" /> Modo diseño
+                </button>
+              )}
+              {designMode && <DesignLayersPanel onClose={() => setDesignMode(false)} />}
+            </div>
             <StatusBar zoom={zoom} effectiveScale={effectiveScale} setZoom={setZoom} />
           </div>
         </div>

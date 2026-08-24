@@ -27,7 +27,8 @@ interface Props {
 
 type Draft =
   | { mode: "create"; kind: AnnotationKind; start: Point; current: Point; points: Point[] }
-  | { mode: "move"; id: string; origin: Annotation; start: Point }
+  | { mode: "move"; ids: string[]; origins: Annotation[]; start: Point; current: Point }
+  | { mode: "marquee"; start: Point; current: Point; additive: boolean }
   | { mode: "resize"; id: string; origin: Annotation; start: Point };
 
 const MIN_SIZE = 0.004;
@@ -77,11 +78,15 @@ export function AnnotationLayer({
     setTool,
     studyMode,
     toggleCover,
-    selectedAnnotationId,
+    selectedAnnotationIds,
     setSelectedAnnotation,
+    setSelectedAnnotations,
+    toggleAnnotationSelection,
     addAnnotation,
     updateAnnotation,
+    moveAnnotations,
     deleteAnnotation,
+    deleteAnnotations,
   } = usePdfEditor();
   const layerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -114,15 +119,17 @@ export function AnnotationLayer({
       const target = event.target as HTMLElement | null;
       if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable))
         return;
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedAnnotationId) {
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedAnnotationIds.length) {
         event.preventDefault();
-        deleteAnnotation(selectedAnnotationId);
+        deleteAnnotations(
+          selectedAnnotationIds.filter((id) => !annotations.find((item) => item.id === id)?.locked),
+        );
       }
-      if (event.key === "Escape") setSelectedAnnotation(null);
+      if (event.key === "Escape") setSelectedAnnotations([]);
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [deleteAnnotation, selectedAnnotationId, setSelectedAnnotation]);
+  }, [annotations, deleteAnnotations, selectedAnnotationIds, setSelectedAnnotations]);
 
   function toLocal(event: React.PointerEvent | PointerEvent): Point {
     const rect = layerRef.current!.getBoundingClientRect();
@@ -146,7 +153,15 @@ export function AnnotationLayer({
       if (tool === "select") return;
     }
     if (tool === "select") {
-      setSelectedAnnotation(null);
+      const at = toLocal(event);
+      if (!event.shiftKey && !event.metaKey && !event.ctrlKey) setSelectedAnnotations([]);
+      event.preventDefault();
+      setDraft({
+        mode: "marquee",
+        start: at,
+        current: at,
+        additive: event.shiftKey || event.metaKey || event.ctrlKey,
+      });
       return;
     }
     const at = toLocal(event);
@@ -194,14 +209,13 @@ export function AnnotationLayer({
       setDraft({ ...draft, current: at, points: [...draft.points, at] });
       return;
     }
+    if (draft.mode === "marquee" || draft.mode === "move") {
+      setDraft({ ...draft, current: at });
+      return;
+    }
     const dx = at.x - draft.start.x;
     const dy = at.y - draft.start.y;
-    if (draft.mode === "move") {
-      updateAnnotationPreview(draft.origin, {
-        x: Math.max(0, Math.min(1 - draft.origin.width, draft.origin.x + dx)),
-        y: Math.max(0, Math.min(1 - draft.origin.height, draft.origin.y + dy)),
-      });
-    } else {
+    if (draft.mode === "resize") {
       const ratio = draft.origin.height / draft.origin.width;
       const maxWidth = draft.origin.lockAspect
         ? Math.min(1 - draft.origin.x, (1 - draft.origin.y) / ratio)
@@ -287,6 +301,27 @@ export function AnnotationLayer({
       }
       // The strip and the pen stay active so several marks can be made in a row.
       if (kind !== "studyCover" && !STROKE_KINDS.includes(kind)) setTool("select");
+    } else if (draft.mode === "move") {
+      moveAnnotations(draft.ids, draft.current.x - draft.start.x, draft.current.y - draft.start.y);
+    } else if (draft.mode === "marquee") {
+      const box = normalizedBox(draft.start, draft.current);
+      const hits = pageAnnotations
+        .filter(
+          (item) =>
+            !item.hidden &&
+            item.x < box.x + box.width &&
+            item.x + item.width > box.x &&
+            item.y < box.y + box.height &&
+            item.y + item.height > box.y,
+        )
+        .flatMap((item) =>
+          item.groupId
+            ? pageAnnotations
+                .filter((candidate) => candidate.groupId === item.groupId)
+                .map((candidate) => candidate.id)
+            : [item.id],
+        );
+      setSelectedAnnotations(draft.additive ? [...selectedAnnotationIds, ...hits] : hits);
     } else if (preview.id) {
       const { id, ...patch } = preview;
       updateAnnotation(id, patch);
@@ -296,9 +331,26 @@ export function AnnotationLayer({
   }
 
   function renderAnnotation(annotation: Annotation) {
+    const moveOrigin =
+      draft?.mode === "move" ? draft.origins.find((item) => item.id === annotation.id) : undefined;
+    const moved =
+      moveOrigin && draft?.mode === "move"
+        ? {
+            x: Math.max(
+              0,
+              Math.min(1 - moveOrigin.width, moveOrigin.x + draft.current.x - draft.start.x),
+            ),
+            y: Math.max(
+              0,
+              Math.min(1 - moveOrigin.height, moveOrigin.y + draft.current.y - draft.start.y),
+            ),
+          }
+        : {};
     const merged =
-      preview.id === annotation.id ? ({ ...annotation, ...preview } as Annotation) : annotation;
-    const selected = selectedAnnotationId === annotation.id && tool === "select";
+      preview.id === annotation.id
+        ? ({ ...annotation, ...preview, ...moved } as Annotation)
+        : ({ ...annotation, ...moved } as Annotation);
+    const selected = selectedAnnotationIds.includes(annotation.id) && tool === "select";
     const px = (value: number) => value * scale;
     const isEditing = editing?.id === merged.id;
     const box: React.CSSProperties = {
@@ -308,6 +360,7 @@ export function AnnotationLayer({
       width: `${merged.width * 100}%`,
       height: `${merged.height * 100}%`,
       opacity: merged.kind === "studyCover" && merged.revealed ? 0.18 : merged.opacity,
+      display: merged.hidden ? "none" : undefined,
     };
 
     const content = (() => {
@@ -522,12 +575,20 @@ export function AnnotationLayer({
           if (isCover) {
             // Study interaction first: a tap reveals/hides; move only when selected.
             event.stopPropagation();
-            if (selected) {
+            if (selected && !annotation.locked) {
+              const ids = selectedAnnotationIds.includes(annotation.id)
+                ? selectedAnnotationIds
+                : [annotation.id];
+              const movable = pageAnnotations.filter(
+                (item) => ids.includes(item.id) && !item.locked,
+              );
+              const at = toLocal(event);
               setDraft({
                 mode: "move",
-                id: annotation.id,
-                origin: annotation,
-                start: toLocal(event),
+                ids: movable.map((item) => item.id),
+                origins: movable,
+                start: at,
+                current: at,
               });
               return;
             }
@@ -537,16 +598,33 @@ export function AnnotationLayer({
           }
           if (tool !== "select") return;
           event.stopPropagation();
-          setSelectedAnnotation(annotation.id);
+          const additive = event.shiftKey || event.metaKey || event.ctrlKey;
+          const grouped = annotation.groupId
+            ? pageAnnotations
+                .filter((item) => item.groupId === annotation.groupId)
+                .map((item) => item.id)
+            : [annotation.id];
+          if (additive) {
+            for (const id of grouped) toggleAnnotationSelection(id, true);
+            return;
+          }
+          const ids = selectedAnnotationIds.includes(annotation.id)
+            ? selectedAnnotationIds
+            : grouped;
+          setSelectedAnnotations(ids);
+          if (annotation.locked) return;
+          const movable = pageAnnotations.filter((item) => ids.includes(item.id) && !item.locked);
           setDraft({
             mode: "move",
-            id: annotation.id,
-            origin: annotation,
+            ids: movable.map((item) => item.id),
+            origins: movable,
             start: toLocal(event),
+            current: toLocal(event),
           });
         }}
         onDoubleClick={(event) => {
           event.stopPropagation();
+          if (annotation.locked) return;
           if (isCover) {
             setSelectedAnnotation(annotation.id);
             return;
@@ -557,7 +635,7 @@ export function AnnotationLayer({
         }}
       >
         {content}
-        {selected && (
+        {selected && !annotation.locked && selectedAnnotationIds.length === 1 && (
           <>
             <button
               className="absolute -right-3 -top-3 inline-flex size-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow"
@@ -626,6 +704,7 @@ export function AnnotationLayer({
 
   const drafting = draft?.mode === "create" ? draft : null;
   const draftStroke = drafting && STROKE_KINDS.includes(drafting.kind) ? drafting : null;
+  const marquee = draft?.mode === "marquee" ? normalizedBox(draft.start, draft.current) : null;
   const draftBox =
     drafting && !draftStroke ? normalizedBox(drafting.start, drafting.current) : null;
 
@@ -649,6 +728,17 @@ export function AnnotationLayer({
       onPointerLeave={() => draft && endDraft()}
     >
       {pageAnnotations.map(renderAnnotation)}
+      {marquee && (
+        <div
+          className="pointer-events-none absolute border border-dashed border-primary bg-primary/10"
+          style={{
+            left: `${marquee.x * 100}%`,
+            top: `${marquee.y * 100}%`,
+            width: `${marquee.width * 100}%`,
+            height: `${marquee.height * 100}%`,
+          }}
+        />
+      )}
       {draftBox && (
         <div
           className="absolute border border-primary/70 bg-primary/10"
