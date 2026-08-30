@@ -9,6 +9,8 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
+    "preview:cloudflare": "npm run build && npx wrangler dev",
+    "deploy:cloudflare": "npm run build && npx wrangler deploy",
     "lint": "eslint .",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "format": "prettier --write ."

@@ -31,6 +31,19 @@ clic, sin servidor ni instalación.
 Todo el tratamiento principal se realiza en el navegador. Solo el primer uso de algunos idiomas OCR
 puede necesitar descargar sus datos de reconocimiento.
 
+## Publicar en Cloudflare Workers
+
+El proyecto incluye `wrangler.jsonc` para desplegar la salida Nitro de TanStack Start como un
+Cloudflare Worker. La aplicación y sus recursos estáticos se generan en `.output`.
+
+1. Instala las dependencias con `npm install`.
+2. Inicia sesión una vez con `npx wrangler login`.
+3. Publica con `npm run deploy:cloudflare`.
+
+Para probar localmente el mismo runtime de Cloudflare usa `npm run preview:cloudflare`. Los archivos
+PDF y los modelos de IA continúan procesándose y guardándose en el navegador del usuario; el Worker
+solo entrega la aplicación.
+
 Crea una Web App completa de edición de PDFs
 
 Quiero crear una web app profesional para editar, organizar y anotar archivos PDF, similar en concepto a un editor PDF sencillo tipo Adobe Acrobat, pero con una interfaz mucho más limpia, moderna y fácil de usar.
