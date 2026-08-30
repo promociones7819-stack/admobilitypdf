@@ -92,7 +92,7 @@ export function SourcesPanel() {
                 <p className="truncate">{source.name}</p>
                 <p className="text-[11px] text-muted-foreground">
                   {source.status === "ready"
-                    ? `${source.pageCount} pág · ${source.chunkCount} fragmentos`
+                    ? `${source.pageCount} pág · ${source.chunkCount} fragmentos${source.ocrPageCount ? ` · OCR ${source.ocrPageCount} pág` : ""}`
                     : source.status === "error"
                       ? (source.error ?? "Error")
                       : "Procesando…"}

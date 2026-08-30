@@ -30,6 +30,8 @@ export interface Source {
   hasBytes: boolean;
   /** Excluir de la recuperación sin borrar la fuente. */
   enabled: boolean;
+  /** Páginas que necesitaron OCR porque el PDF no contenía texto utilizable. */
+  ocrPageCount?: number;
 }
 
 export interface Chunk {
@@ -52,6 +54,7 @@ export interface ParsedPage {
 
 export interface ParsedDocument {
   pages: ParsedPage[];
+  ocrPageCount?: number;
 }
 
 export interface DocumentParser {
@@ -67,7 +70,11 @@ export interface EmbeddingProvider {
   /** Etiqueta legible del motor en uso (para la UI). */
   label: string;
   ready: () => Promise<void>;
-  embed: (texts: string[], onProgress?: (ratio: number) => void) => Promise<Float32Array[]>;
+  embed: (
+    texts: string[],
+    onProgress?: (ratio: number) => void,
+    task?: "query" | "document",
+  ) => Promise<Float32Array[]>;
 }
 
 export interface RetrievedChunk {

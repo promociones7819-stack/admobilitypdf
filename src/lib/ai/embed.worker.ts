@@ -11,7 +11,9 @@ type ExtractorFn = (
 let extractor: ExtractorFn | null = null;
 let loading: Promise<ExtractorFn> | null = null;
 
-const MODEL_ID = "Xenova/all-MiniLM-L6-v2";
+// E5 es multilingüe (94 idiomas) y ofrece resultados sensiblemente mejores
+// que MiniLM en consultas y documentos en castellano/euskera.
+const MODEL_ID = "Xenova/multilingual-e5-small";
 
 async function getExtractor(): Promise<ExtractorFn> {
   if (extractor) return extractor;
@@ -43,6 +45,7 @@ interface EmbedRequest {
   type: "embed";
   id: number;
   texts: string[];
+  task?: "query" | "document";
 }
 
 interface WarmRequest {
@@ -59,7 +62,12 @@ self.onmessage = async (event: MessageEvent<EmbedRequest | WarmRequest>) => {
       self.postMessage({ type: "warm-done", id: message.id });
       return;
     }
-    const output = await pipe(message.texts, { pooling: "mean", normalize: true });
+    // E5 fue entrenado con estos prefijos. Son parte del contrato del modelo.
+    const prefix = message.task === "query" ? "query: " : "passage: ";
+    const output = await pipe(message.texts.map((text) => `${prefix}${text}`), {
+      pooling: "mean",
+      normalize: true,
+    });
     const vectors = output.tolist().map((row) => new Float32Array(row));
     self.postMessage({ type: "embed-done", id: message.id, vectors });
   } catch (error) {

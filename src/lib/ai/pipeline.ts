@@ -2,10 +2,10 @@
 // documento → texto → chunks → embeddings → índice → búsqueda → LLM → citas.
 import { chunkDocument, toChunks } from "./chunk";
 import { getEmbedder } from "./embeddings";
-import { putSource, putSourceBytes } from "./db";
+import { getNotebookChunks, putSource, putSourceBytes } from "./db";
 import { detectKind, resolveParser } from "./parsers";
 import { buildCitations, buildContext, systemPrompt } from "./prompt";
-import { indexedDbVectorStore } from "./vectorStore";
+import { indexedDbVectorStore, keywordSearch } from "./vectorStore";
 import type {
   AnswerMode,
   Citation,
@@ -31,6 +31,29 @@ export const STEP_LABEL: Record<IngestStep, string> = {
   indexing: "Indexando",
   done: "Completado",
 };
+
+/** Recalcula el índice del cuaderno al cambiar de modelo de embeddings. */
+export async function reindexNotebook(
+  notebookId: string,
+  onProgress?: (ratio: number) => void,
+): Promise<number> {
+  const chunks = await getNotebookChunks(notebookId);
+  if (!chunks.length) {
+    onProgress?.(1);
+    return 0;
+  }
+  const embedder = getEmbedder();
+  await embedder.ready();
+  const vectors = await embedder.embed(
+    chunks.map((chunk) => chunk.text),
+    onProgress,
+    "document",
+  );
+  await indexedDbVectorStore.add(
+    chunks.map((chunk, index) => ({ ...chunk, embedding: vectors[index] ?? chunk.embedding })),
+  );
+  return chunks.length;
+}
 
 function makeId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
@@ -83,6 +106,7 @@ export async function ingestFile(
     const vectors = await embedder.embed(
       drafts.map((draft) => draft.text),
       (ratio) => onProgress({ step: "embedding", ratio: 0.55 + ratio * 0.35 }),
+      "document",
     );
 
     onProgress({ step: "indexing", ratio: 0.92 });
@@ -98,6 +122,7 @@ export async function ingestFile(
       status: "ready",
       pageCount: parsed.pages.length,
       chunkCount: chunks.length,
+      ocrPageCount: parsed.ocrPageCount ?? 0,
     };
     await putSource(ready);
     onSource?.(ready);
@@ -122,7 +147,7 @@ export async function retrieve(
 ): Promise<RetrievedChunk[]> {
   const embedder = getEmbedder();
   await embedder.ready();
-  const [queryVector] = await embedder.embed([question]);
+  const [queryVector] = await embedder.embed([question], undefined, "query");
   if (!queryVector) return [];
   const scope = options.scope;
   const pageNumbers =
@@ -131,11 +156,32 @@ export async function retrieve(
       : undefined;
   const sourceIds =
     scope && scope.kind !== "all" && scope.sourceId ? [scope.sourceId] : options.sourceIds;
-  const results = await indexedDbVectorStore.search(notebookId, queryVector, options.topK ?? 6, {
-    ...(sourceIds ? { sourceIds } : {}),
-    ...(pageNumbers ? { pageNumbers } : {}),
+  const topK = options.topK ?? 6;
+  const [semantic, lexical] = await Promise.all([
+    indexedDbVectorStore.search(notebookId, queryVector, topK * 2, {
+      ...(sourceIds ? { sourceIds } : {}),
+      ...(pageNumbers ? { pageNumbers } : {}),
+    }),
+    keywordSearch(notebookId, question, topK * 2, sourceIds, pageNumbers),
+  ]);
+  // Recuperación híbrida: E5 encuentra conceptos equivalentes y la rama
+  // léxica protege nombres, cifras y términos exactos frecuentes en apuntes.
+  const merged = new Map<string, RetrievedChunk>();
+  semantic.forEach((item, index) =>
+    merged.set(item.chunk.id, { ...item, score: item.score * 0.75 + 0.25 / (index + 1) }),
+  );
+  lexical.forEach((item, index) => {
+    const previous = merged.get(item.chunk.id);
+    const boost = 0.35 / (index + 1);
+    merged.set(item.chunk.id, {
+      chunk: item.chunk,
+      score: (previous?.score ?? 0) + boost,
+    });
   });
-  return results.filter((item) => item.score > 0.05);
+  return [...merged.values()]
+    .filter((item) => item.score > 0.05)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK);
 }
 
 export interface AskResult {
