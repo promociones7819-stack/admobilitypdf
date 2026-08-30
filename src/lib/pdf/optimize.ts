@@ -10,6 +10,7 @@
 import { getPdfjs } from "./pdfjs";
 
 export const LARGE_PDF_BYTES = 150 * 1024 * 1024;
+const MAX_LOSSLESS_REBUILD_BYTES = 220 * 1024 * 1024;
 
 export type OptimizeLevel = "smart" | "quality" | "balanced" | "max";
 
@@ -43,6 +44,12 @@ export interface OptimizeResult {
 }
 
 type AnyCanvas = OffscreenCanvas | HTMLCanvasElement;
+
+// Safari/iPad puede cerrar la pestaña al crear lienzos muy grandes aunque haya
+// memoria aparente. Estos límites mantienen cada página por debajo de ~40 MB
+// sin impedir una lectura nítida en pantalla e impresión doméstica.
+const MAX_CANVAS_PIXELS = 10_000_000;
+const MAX_CANVAS_SIDE = 8_192;
 
 function makeCanvas(width: number, height: number): AnyCanvas {
   if (typeof OffscreenCanvas !== "undefined") return new OffscreenCanvas(width, height);
@@ -130,7 +137,14 @@ async function rasterize(
     for (let n = 1; n <= total; n += 1) {
       const page = await doc.getPage(n);
       const base = page.getViewport({ scale: 1 });
-      const viewport = page.getViewport({ scale: Math.max(0.2, dpi / 72) });
+      const requestedScale = Math.max(0.2, dpi / 72);
+      const areaScale = Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, base.width * base.height));
+      const sideScale = Math.min(
+        MAX_CANVAS_SIDE / Math.max(1, base.width),
+        MAX_CANVAS_SIDE / Math.max(1, base.height),
+      );
+      const safeScale = Math.max(0.2, Math.min(requestedScale, areaScale, sideScale));
+      const viewport = page.getViewport({ scale: safeScale });
       const canvas = makeCanvas(
         Math.max(1, Math.floor(viewport.width)),
         Math.max(1, Math.floor(viewport.height)),
@@ -176,6 +190,15 @@ const SMART_PASSES: RasterOptions[] = [
   { dpi: 100, quality: 0.5 },
 ];
 
+/** Elige una primera pasada cercana al objetivo para evitar cuatro PDF completos en memoria. */
+function smartPassIndex(originalSize: number, target: number): number {
+  const ratio = target / Math.max(1, originalSize);
+  if (ratio >= 0.72) return 0;
+  if (ratio >= 0.5) return 1;
+  if (ratio >= 0.32) return 2;
+  return 3;
+}
+
 export interface OptimizeOptions {
   level: OptimizeLevel;
   /** Tamaño objetivo en bytes (por defecto 150 MB). */
@@ -193,14 +216,19 @@ export async function optimizePdf(
   onProgress?.({ phase: "analyze", done: 1, total: 1 });
 
   onProgress?.({ phase: "rebuild", done: 0, total: 1 });
-  let best: Uint8Array;
-  try {
-    best = await rebuildLossless(bytes);
-  } catch (error) {
-    console.warn("[pdf] no se pudo reconstruir sin pérdidas", error);
-    best = bytes.slice(0);
+  // pdf-lib necesita mantener el original y la copia reconstruida a la vez.
+  // Por encima de este límite es más seguro saltar directamente a la pasada
+  // de imágenes, especialmente en iPad/Safari.
+  let best: Uint8Array = bytes;
+  if (originalSize <= MAX_LOSSLESS_REBUILD_BYTES) {
+    try {
+      best = await rebuildLossless(bytes);
+    } catch (error) {
+      console.warn("[pdf] no se pudo reconstruir sin pérdidas", error);
+      best = bytes;
+    }
   }
-  if (best.byteLength > originalSize) best = bytes.slice(0);
+  if (best.byteLength > originalSize) best = bytes;
   onProgress?.({ phase: "rebuild", done: 1, total: 1 });
 
   const result = (data: Uint8Array, strategy: OptimizeResult["strategy"]): OptimizeResult => ({
@@ -209,12 +237,9 @@ export async function optimizePdf(
     originalSize,
     size: data.byteLength,
     strategy,
-    textPreserved: strategy === "lossless" || analysis.charsPerPage < 20,
+    textPreserved: strategy === "lossless",
     analysis,
   });
-
-  // Los PDFs de texto nunca se rasterizan: el texto debe seguir siendo buscable.
-  if (!analysis.imageHeavy) return result(best, "lossless");
 
   if (level === "quality" || best.byteLength <= target) {
     if (level === "quality") {
@@ -229,13 +254,18 @@ export async function optimizePdf(
   }
 
   if (level === "smart") {
-    let last: Uint8Array | null = null;
-    for (let i = 0; i < SMART_PASSES.length; i += 1) {
-      const candidate = await rasterize(bytes, SMART_PASSES[i]!, onProgress, i + 1);
-      last = !last || candidate.byteLength < last.byteLength ? candidate : last;
+    const first = smartPassIndex(originalSize, target);
+    // Como máximo dos intentos: la pasada estimada y una inferior si aún no
+    // alcanza el objetivo. Evita picos de memoria con documentos grandes.
+    const attempts = first < SMART_PASSES.length - 1 ? [first, first + 1] : [first];
+    let candidate: Uint8Array | null = null;
+    for (const i of attempts) {
+      // Reasignar permite liberar la pasada anterior antes de conservar otra
+      // copia completa del documento.
+      candidate = await rasterize(bytes, SMART_PASSES[i]!, onProgress, i + 1);
       if (candidate.byteLength <= target) return result(candidate, "raster");
     }
-    if (last && last.byteLength < best.byteLength) return result(last, "raster");
+    if (candidate && candidate.byteLength < best.byteLength) return result(candidate, "raster");
     return result(best, "lossless");
   }
 

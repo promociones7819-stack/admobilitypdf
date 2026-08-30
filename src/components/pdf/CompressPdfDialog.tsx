@@ -56,6 +56,17 @@ const PHASES: Record<OptimizeProgress["phase"], string> = {
   validate: "Comprobando el resultado…",
 };
 
+function compressionError(error: unknown): string {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (/memory|allocation|out of memory/.test(message))
+    return "El dispositivo se ha quedado sin memoria. Prueba Máxima reducción o procesa menos páginas.";
+  if (/canvas|jpeg/.test(message))
+    return "Una página es demasiado grande para el navegador. Prueba Máxima reducción.";
+  if (/validación|render/.test(message))
+    return "La copia generada no era segura y se ha descartado. El PDF original sigue intacto.";
+  return "No se ha podido reducir el PDF. Tus cambios siguen intactos en el editor.";
+}
+
 function compressedName(name: string): string {
   return `${name.replace(/\.pdf$/i, "")}-reducido.pdf`;
 }
@@ -112,7 +123,7 @@ export function CompressPdfDialog({
       }
     } catch (error) {
       console.error("[pdf] recompresión del documento editado", error);
-      toast.error("No se ha podido reducir el PDF. Tus cambios siguen intactos en el editor.");
+      toast.error(compressionError(error));
     } finally {
       setRunning(false);
       setProgress(null);

@@ -50,6 +50,15 @@ const PHASES: Record<OptimizeProgress["phase"], string> = {
   validate: "Validando el PDF…",
 };
 
+function compressionError(error: unknown): string {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (/memory|allocation|out of memory/.test(message))
+    return "El dispositivo se ha quedado sin memoria. Prueba Máxima compresión.";
+  if (/canvas|jpeg/.test(message))
+    return "Una página es demasiado grande para el navegador. Prueba Máxima compresión.";
+  return "No se ha podido optimizar el PDF. Puedes trabajar con el original.";
+}
+
 export function LargePdfDialog() {
   const { largePrompt, dismissLargePrompt, openFiles } = usePdfEditor();
   const [level, setLevel] = useState<OptimizeLevel>("smart");
@@ -86,7 +95,7 @@ export function LargePdfDialog() {
       setResult(run.result);
     } catch (error) {
       console.error("[pdf] optimización", error);
-      toast.error("No se ha podido optimizar el PDF. Puedes trabajar con el original.");
+      toast.error(compressionError(error));
     } finally {
       setRunning(false);
       setProgress(null);
