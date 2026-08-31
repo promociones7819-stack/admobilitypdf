@@ -53,6 +53,11 @@ Lovable ni de Cloudflare. Produce una versión `arm64` para Apple Silicon y otra
 El editor y sus herramientas se incluyen dentro de la aplicación; las búsquedas web y la primera
 descarga de modelos de IA siguen necesitando conexión a Internet.
 
+## Aplicación autónoma para Android
+
+El flujo `Crear aplicación para Android` genera un APK mediante Capacitor. La interfaz y las
+herramientas locales se incluyen dentro del instalador, sin depender de Lovable ni Cloudflare.
+
 Crea una Web App completa de edición de PDFs
 
 Quiero crear una web app profesional para editar, organizar y anotar archivos PDF, similar en concepto a un editor PDF sencillo tipo Adobe Acrobat, pero con una interfaz mucho más limpia, moderna y fácil de usar.
