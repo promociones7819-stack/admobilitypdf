@@ -33,8 +33,9 @@ puede necesitar descargar sus datos de reconocimiento.
 
 ## Publicar en Cloudflare Workers
 
-El proyecto incluye `wrangler.jsonc` para desplegar la salida Nitro de TanStack Start como un
-Cloudflare Worker. La aplicación y sus recursos estáticos se generan en `.output`.
+El proyecto incluye `wrangler.jsonc` para desplegar la aplicación como SPA estática en Cloudflare
+Workers. Las herramientas PDF, OCR e IA se cargan y ejecutan en el navegador, por lo que no ocupan
+el límite de tamaño del Worker. Los recursos se generan en `.output/public`.
 
 1. Instala las dependencias con `npm install`.
 2. Inicia sesión una vez con `npx wrangler login`.
