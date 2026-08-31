@@ -13,8 +13,8 @@ clic, sin servidor ni instalación.
 
 - Editor PDF completo con organización de páginas, anotaciones, imágenes, firmas, búsqueda y
   censura permanente.
-- Compresión antes y después de editar, combinación, división, extracción y conversión de JPG,
-  HEIC, Word, PowerPoint y Excel a PDF.
+- Compresión antes y después de editar, combinación, división, extracción y conversión de PDF a
+  JPG, además de JPG, HEIC, Word, PowerPoint y Excel a PDF.
 - OCR por rangos y en siete idiomas, con orientación automática y capa de texto posicionada.
 - Constructor local de cuestionarios con preguntas y opciones ordenables, importación desde PDF,
   soluciones, copias editables, autocorrección en lectores compatibles y exportación como formulario
