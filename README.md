@@ -45,6 +45,13 @@ Para probar localmente el mismo runtime de Cloudflare usa `npm run preview:cloud
 PDF y los modelos de IA continúan procesándose y guardándose en el navegador del usuario; el Worker
 solo entrega la aplicación.
 
+## Aplicación autónoma para Mac
+
+El flujo `Crear aplicación para Mac` de GitHub Actions genera instaladores DMG sin depender de
+Lovable ni de Cloudflare. Produce una versión `arm64` para Apple Silicon y otra `x64` para Mac Intel.
+El editor y sus herramientas se incluyen dentro de la aplicación; las búsquedas web y la primera
+descarga de modelos de IA siguen necesitando conexión a Internet.
+
 Crea una Web App completa de edición de PDFs
 
 Quiero crear una web app profesional para editar, organizar y anotar archivos PDF, similar en concepto a un editor PDF sencillo tipo Adobe Acrobat, pero con una interfaz mucho más limpia, moderna y fácil de usar.
