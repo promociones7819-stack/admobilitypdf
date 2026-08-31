@@ -1,0 +1,49 @@
+name: Crear aplicación para Mac
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "electron/**"
+      - "package.json"
+      - "vite.config.ts"
+      - ".github/workflows/build-mac-dmg.yml"
+
+jobs:
+  dmg:
+    name: DMG ${{ matrix.arch }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar dependencias
+        run: |
+          npm install
+          npm install --no-save electron electron-builder
+
+      - name: Construir aplicación web local
+        run: npm run build
+
+      - name: Crear DMG
+        run: npx electron-builder --mac dmg --${{ matrix.arch }} --publish never
+
+      - name: Guardar instalador
+        uses: actions/upload-artifact@v4
+        with:
+          name: PDF-Maestro-Mac-${{ matrix.arch }}
+          path: release/*.dmg
+          if-no-files-found: error
