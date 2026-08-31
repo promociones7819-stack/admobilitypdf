@@ -1,0 +1,8 @@
+{
+  "appId": "com.admobility.pdfmaestro",
+  "appName": "PDF Maestro",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
