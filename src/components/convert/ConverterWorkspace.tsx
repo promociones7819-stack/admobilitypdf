@@ -14,8 +14,9 @@ import { Button } from "@/components/ui/button";
 import { IMAGE_PDF_ACCEPT, imagesPdfName, imagesToPdf } from "@/lib/convert/imagesPdf";
 import { docxToPdf, downloadBlob, pdfToDocx, swapExtension } from "@/lib/convert/wordPdf";
 import { excelToPdf, powerpointToPdf } from "@/lib/convert/officePdf";
+import { pdfToJpg } from "@/lib/convert/pdfJpg";
 
-type Mode = "docx2pdf" | "pdf2docx" | "images2pdf" | "pptx2pdf" | "xlsx2pdf";
+type Mode = "docx2pdf" | "pdf2docx" | "pdf2jpg" | "images2pdf" | "pptx2pdf" | "xlsx2pdf";
 
 interface ConverterCardProps {
   mode: Mode;
@@ -84,11 +85,20 @@ function ConverterCard({
       } else if (mode === "xlsx2pdf") {
         if (!/\.xlsx$/i.test(file.name)) throw new Error("Necesito un archivo .xlsx.");
         await deliverPdf(await excelToPdf(file), swapExtension(file.name, "pdf"));
-      } else {
+      } else if (mode === "pdf2docx") {
         if (!/\.pdf$/i.test(file.name)) throw new Error("Necesito un archivo .pdf.");
         const blob = await pdfToDocx(file, setProgress);
         downloadBlob(blob, swapExtension(file.name, "docx"));
         toast.success("Texto del PDF convertido a Word");
+      } else {
+        if (!/\.pdf$/i.test(file.name)) throw new Error("Necesito un archivo .pdf.");
+        const result = await pdfToJpg(file, setProgress);
+        await downloadBlob(result.blob, result.fileName);
+        toast.success(
+          result.pageCount === 1
+            ? "Página convertida a JPG"
+            : `${result.pageCount} páginas JPG guardadas en un ZIP`,
+        );
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo convertir el archivo");
@@ -121,7 +131,7 @@ function ConverterCard({
       <div className="mx-auto inline-flex size-14 items-center justify-center rounded-2xl bg-card/70">
         {mode === "docx2pdf" ? (
           <FileType2 className="size-7" />
-        ) : mode === "pdf2docx" ? (
+        ) : mode === "pdf2docx" || mode === "pdf2jpg" ? (
           <FileDown className="size-7" />
         ) : mode === "pptx2pdf" ? (
           <Presentation className="size-7" />
@@ -225,6 +235,14 @@ export function ConverterWorkspace({
             accept=".pdf,application/pdf"
             hint="No conserva maquetaciones complejas ni reconoce páginas escaneadas."
             tone="lilac"
+          />
+          <ConverterCard
+            mode="pdf2jpg"
+            title="PDF a JPG"
+            description="Convierte cada página del PDF en una imagen JPG de alta calidad."
+            accept=".pdf,application/pdf"
+            hint="Una página descarga un JPG; varias páginas se agrupan en un ZIP."
+            tone="mint"
           />
           <ConverterCard
             mode="images2pdf"
