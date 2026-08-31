@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "vite dev",
     "local": "vite dev --host 127.0.0.1 --port 4173 --open",
-    "build": "vite build",
+    "build": "vite build --config vite.desktop.config.ts",
     "postbuild": "node scripts/prepare-cloudflare-static.mjs",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
@@ -106,7 +106,7 @@
     ],
     "extraResources": [
       {
-        "from": ".output/public",
+        "from": "dist",
         "to": "app-static"
       }
     ],
