@@ -35,7 +35,8 @@ puede necesitar descargar sus datos de reconocimiento.
 
 El proyecto incluye `wrangler.jsonc` para desplegar la aplicación como SPA estática en Cloudflare
 Workers. Las herramientas PDF, OCR e IA se cargan y ejecutan en el navegador, por lo que no ocupan
-el límite de tamaño del Worker. Los recursos se generan en `.output/public`.
+el límite de tamaño del Worker. Los recursos se generan en `dist` mediante una compilación cliente
+independiente, sin SSR ni prerenderizado.
 
 1. Instala las dependencias con `npm install`.
 2. Inicia sesión una vez con `npx wrangler login`.
