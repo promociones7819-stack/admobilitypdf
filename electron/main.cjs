@@ -26,7 +26,7 @@ const MIME_TYPES = {
 function staticDirectory() {
   return app.isPackaged
     ? path.join(process.resourcesPath, "app-static")
-    : path.join(__dirname, "..", ".output", "public");
+    : path.join(__dirname, "..", "dist");
 }
 
 async function startLocalServer() {
