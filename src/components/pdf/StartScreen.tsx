@@ -240,7 +240,7 @@ export function StartScreen({
               tone="lilac"
               icon={<FileText />}
               title="Conversores"
-              description="Convierte Word ⇄ PDF y transforma fotos JPG o HEIC en un único PDF."
+              description="Convierte PDF a JPG, Word ⇄ PDF y transforma fotos JPG o HEIC en un único PDF."
               action={
                 <Button className={toolButtonClass} onClick={() => onOpenTool("convert")}>
                   Abrir conversores
