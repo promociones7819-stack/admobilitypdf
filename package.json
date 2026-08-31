@@ -1,8 +1,11 @@
 {
   "name": "tanstack_start_ts",
+  "productName": "PDF Maestro",
+  "version": "1.0.0",
   "private": true,
   "sideEffects": false,
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite dev",
     "local": "vite dev --host 127.0.0.1 --port 4173 --open",
@@ -12,6 +15,7 @@
     "preview": "vite preview",
     "preview:cloudflare": "npm run build && npx wrangler dev",
     "deploy:cloudflare": "npm run build && npx wrangler deploy",
+    "desktop:mac": "npm run build && npx electron-builder --mac dmg --publish never",
     "lint": "eslint .",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "format": "prettier --write ."
@@ -89,6 +93,35 @@
     "vaul": "^1.1.2",
     "vite-tsconfig-paths": "^6.0.2",
     "zod": "^3.24.2"
+  },
+  "build": {
+    "appId": "com.admobility.pdfmaestro",
+    "productName": "PDF Maestro",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".output/public",
+        "to": "app-static"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "public/brand/ad-mobility.png",
+      "target": [
+        "dmg"
+      ],
+      "identity": null
+    },
+    "dmg": {
+      "artifactName": "PDF-Maestro-Mac-${arch}.${ext}",
+      "title": "PDF Maestro"
+    }
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
