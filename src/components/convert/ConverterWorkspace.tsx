@@ -8,14 +8,25 @@ import {
   UploadCloud,
   Presentation,
   Sheet,
+  Sparkles,
+  ImageDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { IMAGE_PDF_ACCEPT, imagesPdfName, imagesToPdf } from "@/lib/convert/imagesPdf";
 import { docxToPdf, downloadBlob, pdfToDocx, swapExtension } from "@/lib/convert/wordPdf";
 import { excelToPdf, powerpointToPdf } from "@/lib/convert/officePdf";
+import {
+  BACKGROUND_IMAGE_ACCEPT,
+  PNG_ACCEPT,
+  downloadJpeg,
+  downloadTransparentPng,
+  pngToJpeg,
+  removeImageBackground,
+} from "@/lib/convert/imageTools";
 
-type Mode = "docx2pdf" | "pdf2docx" | "images2pdf" | "pptx2pdf" | "xlsx2pdf";
+type Mode =
+  "docx2pdf" | "pdf2docx" | "images2pdf" | "pptx2pdf" | "xlsx2pdf" | "png2jpg" | "removebg";
 
 interface ConverterCardProps {
   mode: Mode;
@@ -84,6 +95,13 @@ function ConverterCard({
       } else if (mode === "xlsx2pdf") {
         if (!/\.xlsx$/i.test(file.name)) throw new Error("Necesito un archivo .xlsx.");
         await deliverPdf(await excelToPdf(file), swapExtension(file.name, "pdf"));
+      } else if (mode === "png2jpg") {
+        downloadJpeg(await pngToJpeg(file), file.name);
+        toast.success("Imagen JPG creada y descargada");
+      } else if (mode === "removebg") {
+        const result = await removeImageBackground(file, setProgress);
+        downloadTransparentPng(result, file.name);
+        toast.success("Fondo eliminado; PNG transparente descargado");
       } else {
         if (!/\.pdf$/i.test(file.name)) throw new Error("Necesito un archivo .pdf.");
         const blob = await pdfToDocx(file, setProgress);
@@ -127,6 +145,10 @@ function ConverterCard({
           <Presentation className="size-7" />
         ) : mode === "xlsx2pdf" ? (
           <Sheet className="size-7" />
+        ) : mode === "png2jpg" ? (
+          <ImageDown className="size-7" />
+        ) : mode === "removebg" ? (
+          <Sparkles className="size-7" />
         ) : (
           <Images className="size-7" />
         )}
@@ -151,7 +173,11 @@ function ConverterCard({
               }`}
               onClick={() => inputRef.current?.click()}
             >
-              {mode === "images2pdf" ? "Elegir fotos" : "Elegir archivo"}
+              {mode === "images2pdf"
+                ? "Elegir fotos"
+                : mode === "removebg"
+                  ? "Elegir imagen"
+                  : "Elegir archivo"}
             </Button>
           </>
         )}
@@ -236,10 +262,26 @@ export function ConverterWorkspace({
             tone="mint"
             {...(onPdfCreated ? { onPdfCreated } : {})}
           />
+          <ConverterCard
+            mode="png2jpg"
+            title="PNG a JPG"
+            description="Convierte una imagen PNG en JPG de alta calidad, directamente en tu dispositivo."
+            accept={PNG_ACCEPT}
+            hint="Las zonas transparentes del PNG se colocan sobre fondo blanco."
+            tone="lilac"
+          />
+          <ConverterCard
+            mode="removebg"
+            title="Crear logo sin fondo"
+            description="Elimina el fondo con IA y descarga el resultado como PNG transparente."
+            accept={BACKGROUND_IMAGE_ACCEPT}
+            hint="PNG, JPG o JPEG. La primera vez prepara el modelo local de IA."
+            tone="mint"
+          />
         </div>
 
         <p className="mt-8 inline-flex items-center gap-2 text-xs text-muted-foreground">
-          <ShieldCheck className="size-3.5" /> Ningún documento se sube a un servidor.
+          <ShieldCheck className="size-3.5" /> Ningún documento ni imagen se sube a un servidor.
         </p>
       </div>
     </div>
