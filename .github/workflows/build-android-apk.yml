@@ -1,0 +1,59 @@
+name: Crear aplicación para Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "desktop/**"
+      - "capacitor.config.json"
+      - "package.json"
+      - "vite.desktop.config.ts"
+      - ".github/workflows/build-android-apk.yml"
+
+jobs:
+  apk:
+    name: APK Android
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Preparar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Instalar dependencias
+        run: |
+          npm install
+          npm install --no-save @capacitor/core @capacitor/cli @capacitor/android
+
+      - name: Construir aplicación local
+        run: npm run build
+
+      - name: Crear proyecto Android
+        run: |
+          npx cap add android
+          npx cap sync android
+          chmod +x android/gradlew
+
+      - name: Crear APK
+        working-directory: android
+        run: ./gradlew assembleDebug
+
+      - name: Guardar instalador APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PDF-Maestro-Android-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

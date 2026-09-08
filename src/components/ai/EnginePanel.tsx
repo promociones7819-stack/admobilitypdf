@@ -1,9 +1,10 @@
-import { useState } from "react";
-import { Cpu, Download, ShieldCheck, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BrainCircuit, Cpu, Download, FileSearch, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { LOCAL_MODELS } from "@/lib/ai/llm";
+import { onModelDownloadProgress } from "@/lib/ai/embeddings";
 import { useAi } from "@/lib/ai/store";
 
 export function EnginePanel() {
@@ -19,6 +20,14 @@ export function EnginePanel() {
   const [busy, setBusy] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("");
+
+  useEffect(
+    () =>
+      onModelDownloadProgress((ratio) => {
+        if (busy === "embeddings") setProgress(Math.round(ratio * 100));
+      }),
+    [busy],
+  );
 
   async function activate(id: string) {
     setBusy(id);
@@ -116,20 +125,63 @@ export function EnginePanel() {
 
       <div className="space-y-2 border-t border-border pt-4">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Embeddings
+          Procesamiento de documentos
+        </p>
+        <div className="rounded-lg border border-border p-3">
+          <div className="flex items-start gap-3">
+            <FileSearch className="mt-0.5 size-4 text-primary" />
+            <div>
+              <p className="font-medium">OCR automático para PDF</p>
+              <p className="text-xs text-muted-foreground">
+                Activo. Detecta páginas escaneadas y aplica OCR local en español e inglés solo
+                cuando falta una capa de texto.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2 border-t border-border pt-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Búsqueda semántica
         </p>
         <p className="text-xs text-muted-foreground">Actual: {embedderLabel}</p>
         <Button
           size="sm"
           variant="secondary"
+          disabled={busy !== null}
           onClick={() => {
-            void enableNeuralEmbeddings()
-              .then(() => toast.success("Embeddings neuronales activos"))
-              .catch(() => toast.error("No se pudo cargar el modelo de embeddings"));
+            setBusy("embeddings");
+            setProgress(0);
+            setStatus("Descargando Multilingual E5 y reindexando el cuaderno…");
+            void enableNeuralEmbeddings((ratio) => setProgress(Math.round(ratio * 100)))
+              .then((count) =>
+                toast.success(
+                  count
+                    ? `Búsqueda multilingüe activa · ${count} fragmentos reindexados`
+                    : "Búsqueda multilingüe activa",
+                ),
+              )
+              .catch(() => toast.error("No se pudo cargar el modelo de embeddings"))
+              .finally(() => {
+                setBusy(null);
+                setStatus("");
+              });
           }}
         >
-          Activar embeddings neuronales (~30 MB)
+          <BrainCircuit className="size-4" />
+          Activar Multilingual E5 (~120 MB)
         </Button>
+        {busy === "embeddings" && (
+          <>
+            <Progress value={progress} className="h-1.5" />
+            <p className="truncate text-[11px] text-muted-foreground">{status}</p>
+          </>
+        )}
+        <p className="text-[11px] text-muted-foreground">
+          Combina significado y coincidencias literales para encontrar nombres, conceptos y cifras
+          en español con mayor precisión.
+        </p>
       </div>
     </div>
   );

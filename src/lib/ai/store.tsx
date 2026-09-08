@@ -23,7 +23,13 @@ import {
   setSetting,
 } from "./db";
 import { ensureNeuralEmbedder, getEmbedder, onEmbedderChange } from "./embeddings";
-import { askWithSources, ingestFile, STEP_LABEL, type IngestProgress } from "./pipeline";
+import {
+  askWithSources,
+  ingestFile,
+  reindexNotebook,
+  STEP_LABEL,
+  type IngestProgress,
+} from "./pipeline";
 import {
   createWebLlmProvider,
   extractiveProvider,
@@ -90,7 +96,7 @@ interface AiContextValue {
     onProgress: (info: { text: string; progress: number }) => void,
   ) => Promise<void>;
   useExtractive: () => void;
-  enableNeuralEmbeddings: () => Promise<void>;
+  enableNeuralEmbeddings: (onProgress?: (ratio: number) => void) => Promise<number>;
 }
 
 const AiContext = createContext<AiContextValue | null>(null);
@@ -366,9 +372,11 @@ export function AiProvider({ children }: { children: ReactNode }) {
     setLlmLabel(extractiveProvider.label);
   }, []);
 
-  const enableNeuralEmbeddings = useCallback(async () => {
+  const enableNeuralEmbeddings = useCallback(async (onProgress?: (ratio: number) => void) => {
     await ensureNeuralEmbedder(true);
-  }, []);
+    if (!activeId) return 0;
+    return reindexNotebook(activeId, onProgress);
+  }, [activeId]);
 
   const value = useMemo<AiContextValue>(
     () => ({

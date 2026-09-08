@@ -6,11 +6,11 @@ import { ConverterWorkspace } from "@/components/convert/ConverterWorkspace";
 export const Route = createFileRoute("/convertir")({
   head: () => ({
     meta: [
-      { title: "Convertir Word, JPG y HEIC a PDF — PDF Maestro" },
+      { title: "Convertir PDF a JPG, Word e imágenes — PDF Maestro" },
       {
         name: "description",
         content:
-          "Convierte documentos Word, imágenes JPG y fotos HEIC a PDF, o extrae texto de PDF a Word, sin subir tus documentos.",
+          "Convierte PDF a JPG, documentos Word e imágenes JPG o HEIC a PDF, sin subir tus documentos.",
       },
       { property: "og:title", content: "Conversores locales — PDF Maestro" },
       { property: "og:type", content: "website" },

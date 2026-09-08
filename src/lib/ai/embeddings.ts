@@ -138,12 +138,16 @@ function getWorker(): Worker {
   return worker;
 }
 
-function send(type: "embed" | "warm", texts: string[]): Promise<Float32Array[]> {
+function send(
+  type: "embed" | "warm",
+  texts: string[],
+  task: "query" | "document" = "document",
+): Promise<Float32Array[]> {
   const id = nextId++;
   const instance = getWorker();
   return new Promise<Float32Array[]>((resolve, reject) => {
     pending.set(id, { resolve, reject });
-    instance.postMessage({ type, id, texts });
+    instance.postMessage({ type, id, texts, task });
   });
 }
 
@@ -156,17 +160,17 @@ export function onModelDownloadProgress(listener: (ratio: number) => void): () =
 const BATCH = 8;
 
 export const transformersEmbedder: EmbeddingProvider = {
-  id: "minilm-l6-v2",
+  id: "multilingual-e5-small",
   dimensions: DIMS,
-  label: "MiniLM L6 v2 (local, Transformers.js)",
+  label: "Multilingual E5 Small (local, español + 93 idiomas)",
   async ready() {
     await send("warm", []);
   },
-  async embed(texts, onProgress) {
+  async embed(texts, onProgress, task = "document") {
     const out: Float32Array[] = [];
     for (let i = 0; i < texts.length; i += BATCH) {
       const slice = texts.slice(i, i + BATCH);
-      const vectors = await send("embed", slice);
+      const vectors = await send("embed", slice, task);
       out.push(...vectors);
       onProgress?.(Math.min(1, (i + slice.length) / Math.max(1, texts.length)));
     }

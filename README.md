@@ -13,8 +13,8 @@ clic, sin servidor ni instalación.
 
 - Editor PDF completo con organización de páginas, anotaciones, imágenes, firmas, búsqueda y
   censura permanente.
-- Compresión antes y después de editar, combinación, división, extracción y conversión de JPG,
-  HEIC, Word, PowerPoint y Excel a PDF.
+- Compresión antes y después de editar, combinación, división, extracción y conversión de PDF a
+  JPG, además de JPG, HEIC, Word, PowerPoint y Excel a PDF.
 - OCR por rangos y en siete idiomas, con orientación automática y capa de texto posicionada.
 - Constructor local de cuestionarios con preguntas y opciones ordenables, importación desde PDF,
   soluciones, copias editables, autocorrección en lectores compatibles y exportación como formulario
@@ -30,6 +30,33 @@ clic, sin servidor ni instalación.
 
 Todo el tratamiento principal se realiza en el navegador. Solo el primer uso de algunos idiomas OCR
 puede necesitar descargar sus datos de reconocimiento.
+
+## Publicar en Cloudflare Workers
+
+El proyecto incluye `wrangler.jsonc` para desplegar la aplicación como SPA estática en Cloudflare
+Workers. Las herramientas PDF, OCR e IA se cargan y ejecutan en el navegador, por lo que no ocupan
+el límite de tamaño del Worker. Los recursos se generan en `dist` mediante una compilación cliente
+independiente, sin SSR ni prerenderizado.
+
+1. Instala las dependencias con `npm install`.
+2. Inicia sesión una vez con `npx wrangler login`.
+3. Publica con `npm run deploy:cloudflare`.
+
+Para probar localmente el mismo runtime de Cloudflare usa `npm run preview:cloudflare`. Los archivos
+PDF y los modelos de IA continúan procesándose y guardándose en el navegador del usuario; el Worker
+solo entrega la aplicación.
+
+## Aplicación autónoma para Mac
+
+El flujo `Crear aplicación para Mac` de GitHub Actions genera instaladores DMG sin depender de
+Lovable ni de Cloudflare. Produce una versión `arm64` para Apple Silicon y otra `x64` para Mac Intel.
+El editor y sus herramientas se incluyen dentro de la aplicación; las búsquedas web y la primera
+descarga de modelos de IA siguen necesitando conexión a Internet.
+
+## Aplicación autónoma para Android
+
+El flujo `Crear aplicación para Android` genera un APK mediante Capacitor. La interfaz y las
+herramientas locales se incluyen dentro del instalador, sin depender de Lovable ni Cloudflare.
 
 Crea una Web App completa de edición de PDFs
 

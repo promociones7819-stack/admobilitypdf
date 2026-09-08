@@ -1,6 +1,7 @@
 // Document Layer — extracción de texto por páginas. Ampliable con nuevos
 // parsers (DOCX, EPUB, imágenes con OCR, URLs) implementando DocumentParser.
 import { getPdfjs } from "@/lib/pdf/pdfjs";
+import type { PDFPageProxy } from "pdfjs-dist";
 import type { DocumentParser, ParsedDocument, SourceKind } from "./types";
 
 export function detectKind(file: File): SourceKind | null {
@@ -12,6 +13,33 @@ export function detectKind(file: File): SourceKind | null {
 }
 
 const PAGE_CHARS = 3000;
+const MIN_NATIVE_TEXT_CHARS = 40;
+
+type OcrWorker = {
+  recognize: (
+    image: HTMLCanvasElement,
+    options?: { rotateAuto?: boolean },
+  ) => Promise<{ data: { text?: string } }>;
+  terminate: () => Promise<unknown>;
+};
+
+/** Renderiza y reconoce únicamente una página sin capa de texto aprovechable. */
+async function ocrPage(page: PDFPageProxy, worker: OcrWorker) {
+  const viewport = page.getViewport({ scale: 1.8 });
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.floor(viewport.width));
+  canvas.height = Math.max(1, Math.floor(viewport.height));
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) throw new Error("canvas-2d-unavailable");
+  await page.render({ canvas, canvasContext: context, viewport }).promise;
+  try {
+    const result = await worker.recognize(canvas, { rotateAuto: true });
+    return normalizeText(result.data.text ?? "");
+  } finally {
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+}
 
 /** Divide texto plano en "páginas" sintéticas para poder citar posiciones. */
 function paginateText(text: string): ParsedDocument {
@@ -38,22 +66,38 @@ export const pdfParser: DocumentParser = {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const doc = await pdfjs.getDocument({ data: bytes.slice(0) }).promise;
     const pages: ParsedDocument["pages"] = [];
-    for (let i = 1; i <= doc.numPages; i += 1) {
-      const page = await doc.getPage(i);
-      const content = await page.getTextContent();
-      // Reconstruye líneas usando los saltos que reporta pdf.js.
-      let text = "";
-      for (const item of content.items as Array<{ str?: string; hasEOL?: boolean }>) {
-        if (typeof item.str !== "string") continue;
-        text += item.str;
-        text += item.hasEOL ? "\n" : " ";
+    let worker: OcrWorker | null = null;
+    let ocrPageCount = 0;
+    try {
+      for (let i = 1; i <= doc.numPages; i += 1) {
+        const page = await doc.getPage(i);
+        const content = await page.getTextContent();
+        // Reconstruye líneas usando los saltos que reporta pdf.js.
+        let text = "";
+        for (const item of content.items as Array<{ str?: string; hasEOL?: boolean }>) {
+          if (typeof item.str !== "string") continue;
+          text += item.str;
+          text += item.hasEOL ? "\n" : " ";
+        }
+        text = normalizeText(text);
+        if (text.replace(/\s/g, "").length < MIN_NATIVE_TEXT_CHARS) {
+          if (!worker) {
+            const { createWorker } = await import("tesseract.js");
+            worker = (await createWorker(["spa", "eng"])) as unknown as OcrWorker;
+          }
+          const recognized = await ocrPage(page, worker);
+          if (recognized.length > text.length) text = recognized;
+          if (recognized) ocrPageCount += 1;
+        }
+        pages.push({ pageNumber: i, text });
+        page.cleanup();
+        onProgress?.(i / doc.numPages);
       }
-      pages.push({ pageNumber: i, text: normalizeText(text) });
-      page.cleanup();
-      onProgress?.(i / doc.numPages);
+    } finally {
+      await worker?.terminate().catch(() => undefined);
     }
     void doc.destroy();
-    return { pages };
+    return { pages, ocrPageCount };
   },
 };
 

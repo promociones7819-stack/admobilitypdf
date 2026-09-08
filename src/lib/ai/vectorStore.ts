@@ -63,24 +63,44 @@ export async function keywordSearch(
   query: string,
   limit = 30,
   sourceIds?: string[],
+  pageNumbers?: number[],
 ): Promise<RetrievedChunk[]> {
   const chunks = await loadNotebook(notebookId);
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
   const allowed = sourceIds ? new Set(sourceIds) : null;
+  const pages = pageNumbers ? new Set(pageNumbers) : null;
+  const terms = Array.from(
+    new Set(
+      needle
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .split(/[^a-z0-9ñ]+/)
+        .filter((term) => term.length > 2),
+    ),
+  );
   const out: RetrievedChunk[] = [];
   for (const chunk of chunks) {
     if (allowed && !allowed.has(chunk.sourceId)) continue;
-    const haystack = chunk.text.toLowerCase();
+    if (pages && !pages.has(chunk.pageNumber)) continue;
+    const haystack = chunk.text
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
     let score = 0;
-    let from = 0;
-    for (;;) {
-      const at = haystack.indexOf(needle, from);
-      if (at === -1) break;
-      score += 1;
-      from = at + needle.length;
+    if (haystack.includes(needle)) score += 4;
+    for (const term of terms) {
+      let occurrences = 0;
+      let from = 0;
+      while (occurrences < 5) {
+        const at = haystack.indexOf(term, from);
+        if (at === -1) break;
+        occurrences += 1;
+        from = at + term.length;
+      }
+      score += occurrences;
     }
-    if (score) out.push({ chunk, score });
+    if (score) out.push({ chunk, score: score / Math.max(1, terms.length + 4) });
   }
   out.sort((a, b) => b.score - a.score);
   return out.slice(0, limit);
