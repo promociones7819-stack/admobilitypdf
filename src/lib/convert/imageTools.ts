@@ -70,10 +70,10 @@ export async function removeImageBackground(
   });
 }
 
-export function downloadJpeg(blob: Blob, originalName: string): void {
-  downloadBlob(blob, `${baseName(originalName)}.jpg`);
+export async function downloadJpeg(blob: Blob, originalName: string): Promise<void> {
+  await downloadBlob(blob, `${baseName(originalName)}.jpg`);
 }
 
-export function downloadTransparentPng(blob: Blob, originalName: string): void {
-  downloadBlob(blob, `${baseName(originalName)}-sin-fondo.png`);
+export async function downloadTransparentPng(blob: Blob, originalName: string): Promise<void> {
+  await downloadBlob(blob, `${baseName(originalName)}-sin-fondo.png`);
 }

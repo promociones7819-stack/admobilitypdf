@@ -31,7 +31,7 @@ async function ocrPage(page: PDFPageProxy, worker: OcrWorker) {
   canvas.height = Math.max(1, Math.floor(viewport.height));
   const context = canvas.getContext("2d", { alpha: false });
   if (!context) throw new Error("canvas-2d-unavailable");
-  await page.render({ canvas, canvasContext: context, viewport }).promise;
+  await page.render({ canvasContext: context, viewport }).promise;
   try {
     const result = await worker.recognize(canvas, { rotateAuto: true });
     return normalizeText(result.data.text ?? "");

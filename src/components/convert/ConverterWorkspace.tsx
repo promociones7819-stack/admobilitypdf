@@ -68,12 +68,12 @@ function ConverterCard({
 
   async function deliverPdf(bytes: Uint8Array, name: string) {
     const file = pdfFile(bytes, name);
+    await downloadBlob(file, name);
     if (onPdfCreated) {
       await onPdfCreated(file);
-      toast.success("PDF creado y abierto en el editor");
+      toast.success("PDF creado, guardado y abierto en el editor");
       return;
     }
-    downloadBlob(file, name);
     toast.success("Conversión lista, descarga iniciada");
   }
 
@@ -104,16 +104,16 @@ function ConverterCard({
         if (!/\.xlsx$/i.test(file.name)) throw new Error("Necesito un archivo .xlsx.");
         await deliverPdf(await excelToPdf(file), swapExtension(file.name, "pdf"));
       } else if (mode === "png2jpg") {
-        downloadJpeg(await pngToJpeg(file), file.name);
+        await downloadJpeg(await pngToJpeg(file), file.name);
         toast.success("Imagen JPG creada y descargada");
       } else if (mode === "removebg") {
         const result = await removeImageBackground(file, setProgress);
-        downloadTransparentPng(result, file.name);
+        await downloadTransparentPng(result, file.name);
         toast.success("Fondo eliminado; PNG transparente descargado");
       } else if (mode === "pdf2docx") {
         if (!/\.pdf$/i.test(file.name)) throw new Error("Necesito un archivo .pdf.");
         const blob = await pdfToDocx(file, setProgress);
-        downloadBlob(blob, swapExtension(file.name, "docx"));
+        await downloadBlob(blob, swapExtension(file.name, "docx"));
         toast.success("Texto del PDF convertido a Word");
       } else {
         if (!/\.pdf$/i.test(file.name)) throw new Error("Necesito un archivo .pdf.");

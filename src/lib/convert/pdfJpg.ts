@@ -3,6 +3,7 @@ import { getPdfjs } from "@/lib/pdf/pdfjs";
 
 const JPG_SCALE = 2;
 const JPG_QUALITY = 0.92;
+const MAX_CANVAS_EDGE = 4096;
 
 export interface PdfJpgResult {
   blob: Blob;
@@ -40,7 +41,12 @@ export async function pdfToJpg(
   try {
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: JPG_SCALE });
+      const natural = page.getViewport({ scale: 1 });
+      const safeScale = Math.min(
+        JPG_SCALE,
+        MAX_CANVAS_EDGE / Math.max(natural.width, natural.height),
+      );
+      const viewport = page.getViewport({ scale: safeScale });
       const canvas = document.createElement("canvas");
       canvas.width = Math.ceil(viewport.width);
       canvas.height = Math.ceil(viewport.height);
@@ -49,7 +55,7 @@ export async function pdfToJpg(
 
       context.fillStyle = "#ffffff";
       context.fillRect(0, 0, canvas.width, canvas.height);
-      await page.render({ canvas, canvasContext: context, viewport }).promise;
+      await page.render({ canvasContext: context, viewport }).promise;
       const jpeg = await canvasToJpeg(canvas);
       page.cleanup();
       canvas.width = 1;
