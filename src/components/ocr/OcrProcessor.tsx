@@ -213,8 +213,12 @@ export function OcrProcessor({
       setStatus("Inicializando el motor OCR (primera vez puede tardar)…");
       const { createWorker } = await import("tesseract.js");
       let activePageIndex = -1;
+      const localAsset = (assetPath: string) => new URL(assetPath, window.location.origin).href;
       worker = (await runStage(
         createWorker(language, 1, {
+          workerPath: localAsset("/tesseract/worker.min.js"),
+          corePath: localAsset("/tesseract/core"),
+          langPath: localAsset("/tesseract/lang"),
           logger: (message) => {
             const ratio = typeof message.progress === "number" ? message.progress : 0;
             if (message.status === "recognizing text" && activePageIndex >= 0) {
@@ -368,8 +372,8 @@ export function OcrProcessor({
         <div className="flex-1 space-y-1">
           <h2 className="text-lg font-semibold tracking-tight">OCR local de PDF</h2>
           <p className="text-sm text-muted-foreground">
-            Reconoce texto de PDFs escaneados. El archivo se procesa en tu navegador; la primera vez
-            puede necesitar Internet para descargar el motor y el idioma.
+            Reconoce texto de PDFs escaneados. El archivo, el motor y el idioma se procesan dentro
+            de la aplicación y nunca se envían a un servidor.
           </p>
         </div>
         <div className="w-40 space-y-1">
