@@ -60,6 +60,25 @@ type OcrWorker = {
 };
 
 const MAX_BYTES = 100 * 1024 * 1024;
+const MAX_CANVAS_EDGE = 4096;
+const WORKER_TIMEOUT_MS = 90_000;
+const PAGE_TIMEOUT_MS = 120_000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorCode: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error(errorCode)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
+}
 
 async function createSearchablePdf(
   bytes: Uint8Array,
@@ -139,6 +158,7 @@ export function OcrProcessor({
   const [pageData, setPageData] = useState<Array<OcrPageData | null>>([]);
   const workerRef = useRef<OcrWorker | null>(null);
   const cancelledRef = useRef(false);
+  const cancelCurrentRef = useRef<(() => void) | null>(null);
   const initialRef = useRef<File | null>(null);
 
   async function processPdf(file: File | undefined) {
@@ -162,12 +182,24 @@ export function OcrProcessor({
 
     let worker: OcrWorker | null = null;
     cancelledRef.current = false;
+    let rejectCancellation: ((reason: Error) => void) | null = null;
+    const cancellation = new Promise<never>((_resolve, reject) => {
+      rejectCancellation = reject;
+    });
+    cancelCurrentRef.current = () => rejectCancellation?.(new Error("ocr-cancelled"));
+
+    const runStage = <T,>(promise: Promise<T>, timeoutMs: number, errorCode: string) =>
+      Promise.race([withTimeout(promise, timeoutMs, errorCode), cancellation]);
 
     try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
+      const bytes = new Uint8Array(await runStage(file.arrayBuffer(), 30_000, "pdf-read-timeout"));
       setSourceBytes(bytes);
       const pdfjs = await getPdfjs();
-      const pdf = await pdfjs.getDocument({ data: bytes }).promise;
+      const pdf = await runStage(
+        pdfjs.getDocument({ data: bytes }).promise,
+        30_000,
+        "pdf-open-timeout",
+      );
       const numPages = pdf.numPages;
       let selectedPages: number[];
       try {
@@ -180,7 +212,26 @@ export function OcrProcessor({
 
       setStatus("Inicializando el motor OCR (primera vez puede tardar)…");
       const { createWorker } = await import("tesseract.js");
-      worker = (await createWorker(language)) as unknown as OcrWorker;
+      let activePageIndex = -1;
+      worker = (await runStage(
+        createWorker(language, 1, {
+          logger: (message) => {
+            const ratio = typeof message.progress === "number" ? message.progress : 0;
+            if (message.status === "recognizing text" && activePageIndex >= 0) {
+              setProgress(
+                Math.round(
+                  ((activePageIndex + Math.max(0, Math.min(1, ratio))) / selectedPages.length) *
+                    100,
+                ),
+              );
+            } else if (activePageIndex < 0 && ratio > 0) {
+              setProgress(Math.max(1, Math.round(ratio * 5)));
+            }
+          },
+        }),
+        WORKER_TIMEOUT_MS,
+        "ocr-worker-timeout",
+      )) as unknown as OcrWorker;
       workerRef.current = worker;
 
       const parts: string[] = [];
@@ -191,24 +242,33 @@ export function OcrProcessor({
       for (let selectedIndex = 0; selectedIndex < selectedPages.length; selectedIndex += 1) {
         const i = selectedPages[selectedIndex]!;
         if (cancelledRef.current) break;
+        activePageIndex = selectedIndex;
         setStatus(`Procesando página ${i} (${selectedIndex + 1} de ${selectedPages.length})…`);
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 2 });
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const page = await runStage(pdf.getPage(i), 30_000, "pdf-page-timeout");
+        const naturalViewport = page.getViewport({ scale: 1 });
+        const safeScale = Math.min(
+          2,
+          MAX_CANVAS_EDGE / Math.max(naturalViewport.width, naturalViewport.height),
+        );
+        const viewport = page.getViewport({ scale: safeScale });
         const canvas = document.createElement("canvas");
         canvas.width = Math.max(1, Math.floor(viewport.width));
         canvas.height = Math.max(1, Math.floor(viewport.height));
-        const ctx = canvas.getContext("2d");
+        const ctx = canvas.getContext("2d", { alpha: false });
         if (!ctx) throw new Error("canvas-2d-unavailable");
-        await page.render({
-          canvas,
-          canvasContext: ctx,
-          viewport,
-        } as Parameters<typeof page.render>[0]).promise;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await runStage(
+          page.render({ canvasContext: ctx, viewport }).promise,
+          60_000,
+          "pdf-render-timeout",
+        );
 
-        const { data } = await worker!.recognize(
-          canvas,
-          { rotateAuto: autoRotate },
-          { text: true, blocks: true },
+        const { data } = await runStage(
+          worker!.recognize(canvas, { rotateAuto: autoRotate }, { text: true, blocks: true }),
+          PAGE_TIMEOUT_MS,
+          "ocr-page-timeout",
         );
         const words = (data.blocks ?? []).flatMap((block) =>
           (block.paragraphs ?? []).flatMap((paragraph) =>
@@ -225,6 +285,7 @@ export function OcrProcessor({
         parts.push(`--- Página ${i} ---\n${(data.text ?? "").trim()}`);
         setText(parts.join("\n\n"));
         setProgress(Math.round(((selectedIndex + 1) / selectedPages.length) * 100));
+        page.cleanup();
         canvas.width = 0;
         canvas.height = 0;
       }
@@ -243,18 +304,25 @@ export function OcrProcessor({
       );
       toast.success("Texto extraído con OCR");
     } catch (error) {
-      if (!cancelledRef.current) {
+      if (cancelledRef.current || (error instanceof Error && error.message === "ocr-cancelled")) {
+        setStatus("OCR cancelado. Puedes conservar el texto ya reconocido.");
+      } else {
         console.error(error);
         setStatus("");
         toast.error(
           error instanceof Error && error.message === "invalid-page-range"
             ? "El rango de páginas no es válido."
-            : "No se ha podido procesar el PDF con OCR.",
+            : error instanceof Error && error.message === "ocr-worker-timeout"
+              ? "El motor OCR no ha podido iniciarse. Comprueba la conexión a Internet."
+              : error instanceof Error && error.message.endsWith("-timeout")
+                ? "El OCR ha tardado demasiado. Prueba con menos páginas o un PDF más pequeño."
+                : "No se ha podido procesar el PDF con OCR.",
         );
       }
     } finally {
       await worker?.terminate().catch(() => undefined);
       workerRef.current = null;
+      cancelCurrentRef.current = null;
       setBusy(false);
     }
   }
@@ -377,6 +445,8 @@ export function OcrProcessor({
             variant="outline"
             onClick={() => {
               cancelledRef.current = true;
+              cancelCurrentRef.current?.();
+              setStatus("Cancelando OCR…");
               void workerRef.current?.terminate();
             }}
           >
