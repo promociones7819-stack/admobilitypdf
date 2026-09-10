@@ -85,10 +85,9 @@ function ConverterCard({
     try {
       if (mode === "images2pdf") {
         const accepted = files.every(
-          (item) =>
-            /\.(jpe?g|heic|heif)$/i.test(item.name) || /image\/(jpeg|hei[cf])/i.test(item.type),
+          (item) => /\.(jpe?g)$/i.test(item.name) || item.type === "image/jpeg",
         );
-        if (!accepted) throw new Error("Selecciona solamente imágenes JPG o HEIC.");
+        if (!accepted) throw new Error("Selecciona solamente imágenes JPG o JPEG.");
         const bytes = await imagesToPdf(files, (done, total) => setProgress(done / total));
         await deliverPdf(bytes, imagesPdfName(files));
       } else if (mode === "docx2pdf") {
@@ -279,11 +278,11 @@ export function ConverterWorkspace({
           />
           <ConverterCard
             mode="images2pdf"
-            title="JPG y HEIC a PDF"
+            title="JPG a PDF"
             description="Crea un PDF con una fotografía por página, respetando el orden."
             accept={IMAGE_PDF_ACCEPT}
             multiple
-            hint="JPG, JPEG, HEIC o HEIF. Puedes seleccionar varias fotos."
+            hint="JPG o JPEG. Puedes seleccionar varias fotos."
             tone="mint"
             {...(onPdfCreated ? { onPdfCreated } : {})}
           />

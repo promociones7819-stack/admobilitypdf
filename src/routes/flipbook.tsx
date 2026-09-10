@@ -25,7 +25,7 @@ export const Route = createFileRoute("/flipbook")({
   component: FlipbookRoute,
 });
 
-function FlipbookRoute() {
+export function FlipbookRoute() {
   return (
     <main className="min-h-svh bg-background">
       <div className="flex h-14 items-center justify-between border-b border-border bg-card px-4">

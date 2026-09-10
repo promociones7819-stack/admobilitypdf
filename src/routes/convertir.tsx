@@ -10,7 +10,7 @@ export const Route = createFileRoute("/convertir")({
       {
         name: "description",
         content:
-          "Convierte PDF a JPG, documentos Word e imágenes JPG o HEIC a PDF, sin subir tus documentos.",
+          "Convierte PDF a JPG, documentos Word e imágenes JPG a PDF, sin subir tus documentos.",
       },
       { property: "og:title", content: "Conversores locales — PDF Maestro" },
       { property: "og:type", content: "website" },
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/convertir")({
   component: ConvertRoute,
 });
 
-function ConvertRoute() {
+export function ConvertRoute() {
   return (
     <main className="flex min-h-svh flex-col bg-background">
       <header className="flex h-14 shrink-0 items-center border-b border-border bg-card px-4">

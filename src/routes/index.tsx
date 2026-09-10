@@ -210,7 +210,7 @@ function Workspace() {
   );
 }
 
-function Index() {
+export function Index() {
   return (
     <PdfEditorProvider>
       <Workspace />
