@@ -28,32 +28,13 @@ import { parsePageRange } from "@/lib/pdf/ranges";
 
 type Lang = "spa" | "eng" | "cat" | "fra" | "deu" | "ita" | "por";
 
-interface OcrWord {
-  text: string;
-  confidence: number;
-  bbox: { x0: number; y0: number; x1: number; y1: number };
-}
-
-interface OcrPageData {
-  text: string;
-  confidence: number;
-  imageWidth: number;
-  imageHeight: number;
-  words: OcrWord[];
-}
-
 type OcrWorker = {
   recognize: (
     image: unknown,
     options?: { rotateAuto?: boolean },
-    output?: { text?: boolean; blocks?: boolean },
   ) => Promise<{
     data: {
       text: string;
-      confidence?: number;
-      blocks?: Array<{
-        paragraphs?: Array<{ lines?: Array<{ words?: OcrWord[] }> }>;
-      }> | null;
     };
   }>;
   terminate: () => Promise<unknown>;
@@ -61,6 +42,7 @@ type OcrWorker = {
 
 const MAX_BYTES = 100 * 1024 * 1024;
 const MAX_CANVAS_EDGE = 4096;
+const MAX_CANVAS_PIXELS = 4_000_000;
 const WORKER_TIMEOUT_MS = 90_000;
 const PAGE_TIMEOUT_MS = 120_000;
 
@@ -82,7 +64,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorCode: strin
 
 async function createSearchablePdf(
   bytes: Uint8Array,
-  pageData: Array<OcrPageData | null>,
+  pageTexts: Array<string | null>,
 ): Promise<Uint8Array> {
   const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
   const doc = await PDFDocument.load(bytes.slice(0), {
@@ -92,30 +74,7 @@ async function createSearchablePdf(
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const pages = doc.getPages();
   pages.forEach((page, index) => {
-    const recognized = pageData[index];
-    if (!recognized) return;
-    const usableWords = recognized.words
-      .filter((word) => word.text.trim() && word.confidence >= 25)
-      .slice(0, 15_000);
-    if (usableWords.length) {
-      const sx = page.getWidth() / Math.max(1, recognized.imageWidth);
-      const sy = page.getHeight() / Math.max(1, recognized.imageHeight);
-      for (const word of usableWords) {
-        const value = word.text.replace(/[^\u0020-\u00ff]/g, "?").slice(0, 120);
-        if (!value) continue;
-        const size = Math.max(2, Math.min(48, (word.bbox.y1 - word.bbox.y0) * sy * 0.82));
-        page.drawText(value, {
-          x: Math.max(0, word.bbox.x0 * sx),
-          y: Math.max(0, page.getHeight() - word.bbox.y1 * sy),
-          size,
-          font,
-          color: rgb(0, 0, 0),
-          opacity: 0,
-        });
-      }
-      return;
-    }
-    const text = recognized.text
+    const text = (pageTexts[index] ?? "")
       .replace(/[^\u0020-\u00ff\n]/g, "?")
       .split("\n")
       .map((line) => line.trim())
@@ -152,10 +111,10 @@ export function OcrProcessor({
   const [text, setText] = useState("");
   const [language, setLanguage] = useState<Lang>("spa");
   const [pageRange, setPageRange] = useState("");
-  const [autoRotate, setAutoRotate] = useState(true);
+  const [autoRotate, setAutoRotate] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
-  const [pageData, setPageData] = useState<Array<OcrPageData | null>>([]);
+  const [pageTexts, setPageTexts] = useState<Array<string | null>>([]);
   const workerRef = useRef<OcrWorker | null>(null);
   const cancelledRef = useRef(false);
   const cancelCurrentRef = useRef<(() => void) | null>(null);
@@ -175,7 +134,7 @@ export function OcrProcessor({
     setBusy(true);
     setProgress(0);
     setText("");
-    setPageData([]);
+    setPageTexts([]);
     setSourceBytes(null);
     setFileName(file.name);
     setStatus("Leyendo el archivo PDF…");
@@ -212,26 +171,13 @@ export function OcrProcessor({
 
       setStatus("Inicializando el motor OCR (primera vez puede tardar)…");
       const { createWorker } = await import("tesseract.js");
-      let activePageIndex = -1;
       const localAsset = (assetPath: string) => new URL(assetPath, window.location.origin).href;
       worker = (await runStage(
         createWorker(language, 1, {
           workerPath: localAsset("/tesseract/worker.min.js"),
           corePath: localAsset("/tesseract/core"),
           langPath: localAsset("/tesseract/lang"),
-          logger: (message) => {
-            const ratio = typeof message.progress === "number" ? message.progress : 0;
-            if (message.status === "recognizing text" && activePageIndex >= 0) {
-              setProgress(
-                Math.round(
-                  ((activePageIndex + Math.max(0, Math.min(1, ratio))) / selectedPages.length) *
-                    100,
-                ),
-              );
-            } else if (activePageIndex < 0 && ratio > 0) {
-              setProgress(Math.max(1, Math.round(ratio * 5)));
-            }
-          },
+          workerBlobURL: false,
         }),
         WORKER_TIMEOUT_MS,
         "ocr-worker-timeout",
@@ -239,21 +185,21 @@ export function OcrProcessor({
       workerRef.current = worker;
 
       const parts: string[] = [];
-      const recognizedPages: Array<OcrPageData | null> = Array.from(
-        { length: numPages },
-        () => null,
-      );
+      const recognizedPages: Array<string | null> = Array.from({ length: numPages }, () => null);
       for (let selectedIndex = 0; selectedIndex < selectedPages.length; selectedIndex += 1) {
         const i = selectedPages[selectedIndex]!;
         if (cancelledRef.current) break;
-        activePageIndex = selectedIndex;
         setStatus(`Procesando página ${i} (${selectedIndex + 1} de ${selectedPages.length})…`);
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         const page = await runStage(pdf.getPage(i), 30_000, "pdf-page-timeout");
         const naturalViewport = page.getViewport({ scale: 1 });
+        const pixelScale = Math.sqrt(
+          MAX_CANVAS_PIXELS / Math.max(1, naturalViewport.width * naturalViewport.height),
+        );
         const safeScale = Math.min(
           2,
           MAX_CANVAS_EDGE / Math.max(naturalViewport.width, naturalViewport.height),
+          pixelScale,
         );
         const viewport = page.getViewport({ scale: safeScale });
         const canvas = document.createElement("canvas");
@@ -264,29 +210,23 @@ export function OcrProcessor({
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         await runStage(
-          page.render({ canvasContext: ctx, viewport }).promise,
+          page.render({
+            canvas,
+            canvasContext: ctx,
+            viewport,
+          } as Parameters<typeof page.render>[0]).promise,
           60_000,
           "pdf-render-timeout",
         );
 
         const { data } = await runStage(
-          worker!.recognize(canvas, { rotateAuto: autoRotate }, { text: true, blocks: true }),
+          worker!.recognize(canvas, autoRotate ? { rotateAuto: true } : undefined),
           PAGE_TIMEOUT_MS,
           "ocr-page-timeout",
         );
-        const words = (data.blocks ?? []).flatMap((block) =>
-          (block.paragraphs ?? []).flatMap((paragraph) =>
-            (paragraph.lines ?? []).flatMap((line) => line.words ?? []),
-          ),
-        );
-        recognizedPages[i - 1] = {
-          text: (data.text ?? "").trim(),
-          confidence: data.confidence ?? 0,
-          imageWidth: canvas.width,
-          imageHeight: canvas.height,
-          words,
-        };
-        parts.push(`--- Página ${i} ---\n${(data.text ?? "").trim()}`);
+        const pageText = (data.text ?? "").trim();
+        recognizedPages[i - 1] = pageText;
+        parts.push(`--- Página ${i} ---\n${pageText}`);
         setText(parts.join("\n\n"));
         setProgress(Math.round(((selectedIndex + 1) / selectedPages.length) * 100));
         page.cleanup();
@@ -294,18 +234,13 @@ export function OcrProcessor({
         canvas.height = 0;
       }
 
-      setPageData(recognizedPages);
+      setPageTexts(recognizedPages);
       if (cancelledRef.current) {
         setStatus("OCR cancelado. Puedes conservar el texto ya reconocido.");
         return;
       }
 
-      const average =
-        recognizedPages.filter(Boolean).reduce((sum, page) => sum + (page?.confidence ?? 0), 0) /
-        Math.max(1, selectedPages.length);
-      setStatus(
-        `OCR completado: ${selectedPages.length} página(s) · confianza media ${Math.round(average)}%.`,
-      );
+      setStatus(`OCR completado: ${selectedPages.length} página(s).`);
       toast.success("Texto extraído con OCR");
     } catch (error) {
       if (cancelledRef.current || (error instanceof Error && error.message === "ocr-cancelled")) {
@@ -346,9 +281,9 @@ export function OcrProcessor({
   }
 
   async function downloadSearchablePdf() {
-    if (!sourceBytes || !pageData.some(Boolean)) return;
+    if (!sourceBytes || !pageTexts.some(Boolean)) return;
     try {
-      const bytes = await createSearchablePdf(sourceBytes, pageData);
+      const bytes = await createSearchablePdf(sourceBytes, pageTexts);
       const name = (fileName ?? "documento.pdf").replace(/\.pdf$/i, "") + "-ocr-buscable.pdf";
       const file = new File([bytes.slice(0) as unknown as BlobPart], name, {
         type: "application/pdf",
@@ -507,7 +442,7 @@ export function OcrProcessor({
           </Button>
           <Button
             size="sm"
-            disabled={!pageData.some(Boolean) || !sourceBytes}
+            disabled={!pageTexts.some(Boolean) || !sourceBytes}
             onClick={() => void downloadSearchablePdf()}
           >
             <FileSearch className="mr-2 size-4" /> Crear PDF buscable
