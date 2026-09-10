@@ -3,11 +3,35 @@ import { saveBlob } from "@/lib/download";
 const A4_PORTRAIT = { width: 595.28, height: 841.89 };
 const PAGE_MARGIN = 24;
 const MAX_IMAGE_EDGE = 4096;
+const HEIC_TIMEOUT_MS = 90_000;
 
-export const IMAGE_PDF_ACCEPT = ".jpg,.jpeg,image/jpeg";
+export const IMAGE_PDF_ACCEPT = ".jpg,.jpeg,.heic,.heif,image/jpeg,image/heic,image/heif";
+
+function isHeic(file: File): boolean {
+  return /\.(heic|heif)$/i.test(file.name) || /image\/hei[cf]/i.test(file.type);
+}
 
 function isJpeg(file: File): boolean {
   return /\.(jpe?g)$/i.test(file.name) || file.type === "image/jpeg";
+}
+
+function withTimeout<T>(promise: Promise<T>, fileName: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(
+      () => reject(new Error(`La conversión de ${fileName} está tardando demasiado.`)),
+      HEIC_TIMEOUT_MS,
+    );
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
 }
 
 async function decodeImage(blob: Blob, fileName: string): Promise<ImageBitmap> {
@@ -33,9 +57,27 @@ function canvasJpeg(canvas: HTMLCanvasElement, fileName: string): Promise<Blob> 
 }
 
 async function normalizedJpegBytes(file: File): Promise<Uint8Array> {
-  if (!isJpeg(file)) throw new Error(`Formato no compatible: ${file.name}`);
+  if (!isJpeg(file) && !isHeic(file)) throw new Error(`Formato no compatible: ${file.name}`);
 
-  const image = await decodeImage(file, file.name);
+  let source: Blob = file;
+  if (isHeic(file)) {
+    const { default: heic2any } = await import("heic2any");
+    let converted: Blob | Blob[];
+    try {
+      converted = await withTimeout(
+        heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 }),
+        file.name,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("tardando demasiado")) throw error;
+      throw new Error(`No se ha podido convertir el archivo HEIC ${file.name}.`);
+    }
+    const first = Array.isArray(converted) ? converted[0] : converted;
+    if (!first) throw new Error(`No se ha podido convertir ${file.name}`);
+    source = first;
+  }
+
+  const image = await decodeImage(source, file.name);
   try {
     const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(image.width, image.height));
     const width = Math.max(1, Math.round(image.width * scale));
@@ -105,7 +147,7 @@ export async function imagesToPdf(
 
 export function imagesPdfName(files: File[]): string {
   if (files.length !== 1) return "fotos-convertidas.pdf";
-  const base = files[0]!.name.replace(/\.jpe?g$/i, "").trim() || "foto";
+  const base = files[0]!.name.replace(/\.(jpe?g|heic|heif)$/i, "").trim() || "foto";
   return `${base}.pdf`;
 }
 

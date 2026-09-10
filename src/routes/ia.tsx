@@ -31,7 +31,7 @@ export const Route = createFileRoute("/ia")({
   component: AiRoute,
 });
 
-export function AiRoute() {
+function AiRoute() {
   return (
     <AiProvider>
       <AiWorkspace />

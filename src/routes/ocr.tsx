@@ -24,7 +24,7 @@ export const Route = createFileRoute("/ocr")({
   component: OcrRoute,
 });
 
-export function OcrRoute() {
+function OcrRoute() {
   return (
     <main className="min-h-svh bg-background px-4 py-8">
       <div className="mx-auto mb-6 flex w-full max-w-3xl items-center justify-between">
