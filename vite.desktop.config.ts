@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defaultClientConditions, defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
@@ -9,6 +9,10 @@ export default defineConfig({
   publicDir: "../public",
   resolve: {
     tsconfigPaths: true,
+    // Transformers.js descarga ONNX Runtime desde su CDN. Seleccionar la
+    // variante externa evita copiar al build el WASM WebGPU de 26,5 MiB, que
+    // supera el límite de 25 MiB por recurso estático de Cloudflare.
+    conditions: ["onnxruntime-web-use-extern-wasm", ...defaultClientConditions],
   },
   plugins: [react(), tailwindcss()],
   build: {
