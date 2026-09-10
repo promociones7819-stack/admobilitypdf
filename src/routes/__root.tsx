@@ -109,8 +109,20 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="es">
       <head>
         <HeadContent />
-        <link rel="manifest" href="https://progressier.app/xaLBVovTNyhzYOImaBLJ/progressier.json" />
-        <script defer src="https://progressier.app/xaLBVovTNyhzYOImaBLJ/script.js"></script>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ("serviceWorker" in navigator) {
+                navigator.serviceWorker.getRegistrations().then((registrations) => {
+                  registrations.forEach((registration) => registration.unregister());
+                });
+              }
+              if ("caches" in window) {
+                caches.keys().then((names) => names.forEach((name) => caches.delete(name)));
+              }
+            `,
+          }}
+        />
       </head>
       <body>
         {children}
