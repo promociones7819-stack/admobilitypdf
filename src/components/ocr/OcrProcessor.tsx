@@ -31,6 +31,37 @@ type OcrWorker = {
 };
 
 const MAX_BYTES = 100 * 1024 * 1024;
+const MAX_CANVAS_EDGE = 3200;
+const MAX_CANVAS_PIXELS = 4_000_000;
+const PDF_TIMEOUT_MS = 30_000;
+const WORKER_TIMEOUT_MS = 60_000;
+const PAGE_TIMEOUT_MS = 120_000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorCode: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error(errorCode)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
+}
+
+function yieldToBrowser(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => window.setTimeout(resolve, 0));
+  });
+}
+
+function localAsset(pathname: string): string {
+  return new URL(pathname.replace(/^\//, ""), document.baseURI).href;
+}
 
 async function createSearchablePdf(bytes: Uint8Array, pageTexts: string[]): Promise<Uint8Array> {
   const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
@@ -81,11 +112,12 @@ export function OcrProcessor({
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
   const [pageTexts, setPageTexts] = useState<string[]>([]);
   const workerRef = useRef<OcrWorker | null>(null);
+  const activeRef = useRef(false);
   const cancelledRef = useRef(false);
   const initialRef = useRef<File | null>(null);
 
   async function processPdf(file: File | undefined) {
-    if (!file || busy) return;
+    if (!file || activeRef.current) return;
     if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") {
       toast.error("Solo se admiten archivos PDF.");
       return;
@@ -95,6 +127,7 @@ export function OcrProcessor({
       return;
     }
 
+    activeRef.current = true;
     setBusy(true);
     setProgress(0);
     setText("");
@@ -107,38 +140,84 @@ export function OcrProcessor({
     cancelledRef.current = false;
 
     try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
+      // Da tiempo al navegador para mostrar el progreso y el botón Cancelar.
+      await yieldToBrowser();
+      const bytes = new Uint8Array(
+        await withTimeout(file.arrayBuffer(), PDF_TIMEOUT_MS, "pdf-read-timeout"),
+      );
       setSourceBytes(bytes);
-      const pdfjs = await getPdfjs();
-      const pdf = await pdfjs.getDocument({ data: bytes }).promise;
+      const pdfjs = await withTimeout(getPdfjs(), PDF_TIMEOUT_MS, "pdfjs-load-timeout");
+      const pdf = await withTimeout(
+        pdfjs.getDocument({ data: bytes.slice(0), stopAtErrors: false }).promise,
+        PDF_TIMEOUT_MS,
+        "pdf-open-timeout",
+      );
       const numPages = pdf.numPages;
 
-      setStatus("Inicializando el motor OCR (primera vez puede tardar)…");
+      setStatus("Preparando el motor OCR local…");
       const { createWorker } = await import("tesseract.js");
-      worker = (await createWorker(language)) as unknown as OcrWorker;
+      let activePage = 0;
+      worker = (await withTimeout(
+        createWorker(language, 1, {
+          workerPath: localAsset("/tesseract/worker.min.js"),
+          corePath: localAsset("/tesseract/core"),
+          langPath: localAsset("/tesseract/lang"),
+          workerBlobURL: false,
+          logger: (message: { status?: string; progress?: number }) => {
+            const ratio = Math.max(0, Math.min(1, message.progress ?? 0));
+            if (message.status === "recognizing text" && activePage > 0) {
+              setProgress(Math.round(((activePage - 1 + ratio) / numPages) * 100));
+            } else if (activePage === 0 && ratio > 0) {
+              setProgress(Math.max(1, Math.round(ratio * 5)));
+            }
+          },
+          errorHandler: (error: unknown) => console.error("[ocr-worker]", error),
+        }),
+        WORKER_TIMEOUT_MS,
+        "ocr-worker-timeout",
+      )) as unknown as OcrWorker;
       workerRef.current = worker;
 
       const parts: string[] = [];
       for (let i = 1; i <= numPages; i++) {
         if (cancelledRef.current) break;
+        activePage = i;
         setStatus(`Procesando página ${i} de ${numPages}…`);
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 2 });
+        await yieldToBrowser();
+        const page = await withTimeout(pdf.getPage(i), PDF_TIMEOUT_MS, "pdf-page-timeout");
+        const naturalViewport = page.getViewport({ scale: 1 });
+        const scale = Math.min(
+          2,
+          MAX_CANVAS_EDGE / Math.max(naturalViewport.width, naturalViewport.height),
+          Math.sqrt(MAX_CANVAS_PIXELS / (naturalViewport.width * naturalViewport.height)),
+        );
+        const viewport = page.getViewport({ scale: Math.max(0.5, scale) });
         const canvas = document.createElement("canvas");
         canvas.width = Math.max(1, Math.floor(viewport.width));
         canvas.height = Math.max(1, Math.floor(viewport.height));
-        const ctx = canvas.getContext("2d");
+        const ctx = canvas.getContext("2d", { alpha: false });
         if (!ctx) throw new Error("canvas-2d-unavailable");
-        await page.render({
-          canvas,
-          canvasContext: ctx,
-          viewport,
-        } as Parameters<typeof page.render>[0]).promise;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await withTimeout(
+          page.render({
+            canvas,
+            canvasContext: ctx,
+            viewport,
+          } as Parameters<typeof page.render>[0]).promise,
+          PDF_TIMEOUT_MS,
+          "pdf-render-timeout",
+        );
 
-        const { data } = await worker!.recognize(canvas);
+        const { data } = await withTimeout(
+          worker!.recognize(canvas),
+          PAGE_TIMEOUT_MS,
+          "ocr-page-timeout",
+        );
         parts.push(`--- Página ${i} ---\n${(data.text ?? "").trim()}`);
         setText(parts.join("\n\n"));
         setProgress(Math.round((i / numPages) * 100));
+        page.cleanup();
         canvas.width = 0;
         canvas.height = 0;
       }
@@ -152,22 +231,37 @@ export function OcrProcessor({
       setStatus(`OCR completado: ${numPages} página(s).`);
       toast.success("Texto extraído con OCR");
     } catch (error) {
-      if (!cancelledRef.current) {
+      if (cancelledRef.current) {
+        setStatus("OCR cancelado. Puedes conservar el texto ya reconocido.");
+      } else {
         console.error(error);
-        setStatus("");
-        toast.error("No se ha podido procesar el PDF con OCR.");
+        const errorCode = error instanceof Error ? error.message : "ocr-error";
+        const message =
+          errorCode === "ocr-worker-timeout"
+            ? "El motor OCR local no ha podido iniciarse. Recarga la página e inténtalo de nuevo."
+            : errorCode.endsWith("-timeout")
+              ? "El OCR ha tardado demasiado. Prueba con un PDF más pequeño."
+              : "No se ha podido procesar el PDF con OCR.";
+        setStatus(message);
+        toast.error(message);
       }
     } finally {
       await worker?.terminate().catch(() => undefined);
       workerRef.current = null;
+      activeRef.current = false;
       setBusy(false);
     }
+  }
+
+  function schedulePdf(file: File | undefined) {
+    if (!file) return;
+    window.setTimeout(() => void processPdf(file), 0);
   }
 
   useEffect(() => {
     if (!initialFile || initialRef.current === initialFile) return;
     initialRef.current = initialFile;
-    void processPdf(initialFile);
+    schedulePdf(initialFile);
     // El fichero inicial solo se procesa una vez por identidad.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialFile]);
@@ -205,8 +299,8 @@ export function OcrProcessor({
         <div className="flex-1 space-y-1">
           <h2 className="text-lg font-semibold tracking-tight">OCR local de PDF</h2>
           <p className="text-sm text-muted-foreground">
-            Reconoce texto de PDFs escaneados. El archivo se procesa en tu navegador; la primera vez
-            puede necesitar Internet para descargar el motor y el idioma.
+            Reconoce texto de PDFs escaneados. El archivo, el motor y el idioma se procesan dentro
+            de la aplicación y nunca se envían a un servidor.
           </p>
         </div>
         <div className="w-40 space-y-1">
@@ -232,7 +326,7 @@ export function OcrProcessor({
         onDrop={(e) => {
           e.preventDefault();
           setDragging(false);
-          void processPdf(e.dataTransfer.files?.[0]);
+          schedulePdf(e.dataTransfer.files?.[0]);
         }}
         className={`rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
           dragging ? "border-primary bg-primary/5" : "border-border bg-card"
@@ -274,7 +368,7 @@ export function OcrProcessor({
           onChange={(e) => {
             const file = e.target.files?.[0];
             e.target.value = "";
-            void processPdf(file);
+            schedulePdf(file);
           }}
         />
       </div>

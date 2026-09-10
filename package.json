@@ -127,6 +127,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/spa": "1.0.0",
     "@lovable.dev/vite-tanstack-config": "^2.15.0",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
